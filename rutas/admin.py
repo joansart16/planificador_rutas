@@ -24,9 +24,8 @@ ROUTES_MENU_ORDER = {
     'Vehicle': 1,
     'Driver': 2,
     'Company': 3,
-    'Location': 4,
-    'Contract': 5,
-    'ServiceTask': 6,
+    'Contract': 4,
+    'ServiceTask': 5,
 }
 
 
@@ -37,6 +36,8 @@ def _get_app_list_with_custom_rutas_order(self, request, app_label=None):
     app_list = _original_get_app_list(self, request, app_label)
     for app in app_list:
         if app.get('app_label') == 'rutas':
+            # Ocultar Location del menú: ahora está integrada dentro del formulario de Contrato
+            app['models'] = [m for m in app['models'] if m.get('object_name') != 'Location']
             app['models'].sort(
                 key=lambda model: (
                     ROUTES_MENU_ORDER.get(model.get('object_name'), 999),
@@ -351,6 +352,134 @@ class ContractAdminForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['cleaning_weekdays'].initial = self.instance.cleaning_weekdays or []
+
+    def clean_cleaning_weekdays(self):
+        weekdays = self.cleaned_data.get('cleaning_weekdays') or []
+        return sorted(set(int(day) for day in weekdays))
+
+
+class ContractWithLocationForm(forms.ModelForm):
+    """
+    Formulario de Contrato con los campos de Ubicación integrados.
+    Los nombres de los campos de Location coinciden con sus IDs de HTML (id_address,
+    id_latitude, etc.) para que location_geocode.js funcione sin modificaciones.
+    """
+
+    # ── Campos de Ubicación ──────────────────────────────────────────────────
+    name = forms.CharField(
+        max_length=200,
+        label='Nombre del sitio',
+    )
+    company = forms.ModelChoiceField(
+        queryset=Company.objects.all(),
+        required=False,
+        label='Empresa / Cliente',
+        help_text='Empresa titular. Permite filtrar todas sus ubicaciones.',
+    )
+    default_driver = forms.ModelChoiceField(
+        queryset=Driver.objects.all(),
+        required=False,
+        label='Conductor por defecto',
+        help_text='Se asignará automáticamente a las tareas de este sitio.',
+    )
+    contact_name = forms.CharField(
+        max_length=150, required=False,
+        label='Persona de contacto',
+    )
+    contact_phone = forms.CharField(
+        max_length=20, required=False,
+        label='Teléfono de contacto',
+    )
+    comment = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 3}),
+        required=False,
+        label='Comentario',
+        help_text='Indicaciones operativas para el servicio en esta ubicación.',
+    )
+    cabin_count = forms.IntegerField(
+        min_value=1,
+        initial=1,
+        label='Número de cabinas',
+    )
+    address = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 2}),
+        label='Dirección (calle y número)',
+    )
+    town = forms.CharField(
+        max_length=100, required=False,
+        label='Población',
+        help_text='Núcleo habitado (ej: Palmanyola). Se rellena automáticamente.',
+    )
+    municipality = forms.CharField(
+        max_length=100, required=False,
+        label='Municipio',
+        help_text='Municipio administrativo (ej: Bunyola). Se usa para calcular la comarca.',
+    )
+    postal_code = forms.CharField(
+        max_length=10, required=False,
+        label='Código postal',
+    )
+    zone = forms.ChoiceField(
+        choices=[('', '---------')] + list(Location.Zone.choices),
+        required=False,
+        label='Zona de Mallorca',
+        help_text='Comarca o zona de la isla.',
+    )
+    latitude = forms.DecimalField(
+        max_digits=9, decimal_places=6,
+        required=False,
+        label='Latitud',
+    )
+    longitude = forms.DecimalField(
+        max_digits=9, decimal_places=6,
+        required=False,
+        label='Longitud',
+    )
+    max_vehicle_size = forms.TypedChoiceField(
+        choices=Vehicle.Size.choices,
+        coerce=int,
+        label='Tamaño máximo de vehículo',
+        help_text='Vehículos con tamaño superior serán rechazados (gálibo).',
+    )
+
+    # ── Campos de Contrato ────────────────────────────────────────────────────
+    cleaning_weekdays = forms.TypedMultipleChoiceField(
+        label='Días de limpieza (lunes a domingo)',
+        choices=Contract.Weekday.choices,
+        coerce=int,
+        widget=forms.CheckboxSelectMultiple,
+        required=True,
+        help_text='Selecciona exactamente los días que correspondan a limpiezas por semana (1 a 7).',
+    )
+
+    class Meta:
+        model = Contract
+        exclude = ['location']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['cleaning_weekdays'].initial = self.instance.cleaning_weekdays or []
+
+        # Pre-popular campos de ubicación al editar un contrato existente
+        if self.instance.pk and self.instance.location_id:
+            loc = self.instance.location
+            self.initial.update({
+                'name': loc.name,
+                'company': loc.company_id,
+                'default_driver': loc.default_driver_id,
+                'contact_name': loc.contact_name,
+                'contact_phone': loc.contact_phone,
+                'comment': loc.comment,
+                'cabin_count': loc.cabin_count,
+                'address': loc.address,
+                'town': loc.town,
+                'municipality': loc.municipality,
+                'postal_code': loc.postal_code,
+                'zone': loc.zone,
+                'latitude': loc.latitude,
+                'longitude': loc.longitude,
+                'max_vehicle_size': loc.max_vehicle_size,
+            })
 
     def clean_cleaning_weekdays(self):
         weekdays = self.cleaned_data.get('cleaning_weekdays') or []
@@ -825,7 +954,7 @@ class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
         'estado': ['Activo', 'Cerrado'],
     }
 
-    form = ContractAdminForm
+    form = ContractWithLocationForm
     change_list_template = 'admin/rutas/contract/change_list.html'
     list_display   = (
         '__str__', 'location', 'start_date', 'end_date',
@@ -836,14 +965,23 @@ class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
     date_hierarchy = 'start_date'
     inlines        = [ServiceTaskInline]
     actions        = ['delete_selected']
-    autocomplete_fields = ('location',)
     fieldsets      = (
-        ('Ubicación', {
-            'fields': ('location',),
+        ('Identificación de la ubicación', {
+            'fields': ('name', 'company', 'default_driver'),
+        }),
+        ('Contacto en obra', {
+            'fields': ('contact_name', 'contact_phone', 'comment', 'cabin_count'),
+            'description': 'Responsable de la ubicación.',
+        }),
+        ('Dirección', {
+            'fields': ('address', 'latitude', 'longitude', 'town', 'municipality', 'postal_code', 'zone'),
             'description': (
-                'La restricción de tamaño para limpiezas se toma de '
-                'Location.max_vehicle_size.'
+                'Usa el buscador de Google Maps que aparece arriba para '
+                'autocompletar todos los campos.'
             ),
+        }),
+        ('Restricción de vehículo', {
+            'fields': ('max_vehicle_size',),
         }),
         ('Período del contrato', {
             'fields': ('start_date', 'end_date', 'cleaning_frequency', 'cleaning_weekdays'),
@@ -862,7 +1000,42 @@ class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
     )
 
     class Media:
-        js = ('rutas/admin/contract_dates_tomorrow.js',)
+        js = ('rutas/admin/contract_dates_tomorrow.js', 'rutas/admin/location_geocode.js')
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['google_maps_api_key'] = settings.GOOGLE_MAPS_API_KEY
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def save_model(self, request, obj, form, change):
+        cd = form.cleaned_data
+        location_data = {
+            'name': cd['name'],
+            'company': cd.get('company'),
+            'default_driver': cd.get('default_driver'),
+            'contact_name': cd.get('contact_name', ''),
+            'contact_phone': cd.get('contact_phone', ''),
+            'comment': cd.get('comment', ''),
+            'cabin_count': cd.get('cabin_count', 1),
+            'address': cd['address'],
+            'town': cd.get('town', ''),
+            'municipality': cd.get('municipality', ''),
+            'postal_code': cd.get('postal_code', ''),
+            'zone': cd.get('zone', ''),
+            'latitude': cd.get('latitude'),
+            'longitude': cd.get('longitude'),
+            'max_vehicle_size': cd['max_vehicle_size'],
+        }
+        if obj.location_id:
+            loc = obj.location
+            for attr, value in location_data.items():
+                setattr(loc, attr, value)
+            loc.save()
+        else:
+            loc = Location(**location_data)
+            loc.save()
+            obj.location = loc
+        super().save_model(request, obj, form, change)
 
     def import_excel_row(self, row_data) -> bool:
         location_name = _as_text(row_data['ubicacion'])
