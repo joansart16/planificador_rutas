@@ -1,0 +1,63 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Reasignar conductor | {{ opts.verbose_name_plural|capfirst }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% trans 'Inicio' %}</a>
+  &rsaquo;
+  <a href="{% url 'admin:rutas_servicetask_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo;
+  Reasignar conductor
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>Reasignar conductor</h1>
+
+<p>
+  Se va a reasignar el conductor de
+  <strong>{{ tasks.count }} tarea(s)</strong>:
+</p>
+
+<ul>
+  {% for task in tasks %}
+    <li>{{ task }}</li>
+  {% endfor %}
+</ul>
+
+<form method="post">
+  {% csrf_token %}
+
+  <fieldset class="module aligned">
+    <div class="form-row">
+      <label for="id_new_driver">{{ form.new_driver.label }}:</label>
+      {{ form.new_driver }}
+      {% if form.new_driver.help_text %}
+        <p class="help">{{ form.new_driver.help_text }}</p>
+      {% endif %}
+      {% if form.new_driver.errors %}
+        <ul class="errorlist">
+          {% for error in form.new_driver.errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  </fieldset>
+
+  {# Pasamos las PKs seleccionadas y la acción al formulario de confirmación #}
+  <input type="hidden" name="action" value="{{ action }}">
+  {% for task in tasks %}
+    <input type="hidden" name="_selected_action" value="{{ task.pk }}">
+  {% endfor %}
+
+  <div class="submit-row">
+    <input type="submit" name="apply" value="Confirmar reasignación" class="default">
+    <a href="{% url 'admin:rutas_servicetask_changelist' %}" class="button cancel-link">
+      Cancelar
+    </a>
+  </div>
+</form>
+{% endblock %}

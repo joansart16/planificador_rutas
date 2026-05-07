@@ -1,0 +1,110 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Generar entregas por día{% endblock %}
+
+{% block content %}
+<h1>Generar entregas por día</h1>
+<p class="help">
+  Selecciona un día <strong>a partir de mañana</strong> para generar automáticamente todas las tareas de entrega de los
+  contratos que comienzan en esa fecha.<br>
+  <strong>No se duplican:</strong> si la tarea ya existe para ese contrato y día, se omite.
+</p>
+
+{% if messages %}
+  <ul class="messagelist">
+    {% for message in messages %}
+      <li class="{{ message.tags }}">{{ message }}</li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+<div class="submit-row" style="margin-bottom: 1.5rem;">
+  <strong>Accesos rápidos:</strong>&nbsp;
+  {% for label, d in quick_dates.items %}
+    <form method="post" style="display:inline;">
+      {% csrf_token %}
+      <input type="hidden" name="target_date" value="{{ d|date:'Y-m-d' }}">
+      <button type="submit" class="button {% if d == tomorrow %}default{% endif %}">
+        {{ label }} ({{ d|date:"D d/m" }})
+      </button>
+    </form>
+    &nbsp;
+  {% endfor %}
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  <fieldset class="module aligned">
+    <div class="form-row">
+      <label for="target_date"><strong>Fecha concreta (a partir de mañana):</strong></label>
+      <input
+        type="date"
+        id="target_date"
+        name="target_date"
+        value="{{ target_date|date:'Y-m-d' }}"
+        min="{{ tomorrow|date:'Y-m-d' }}"
+        style="margin-left:.5rem;"
+      >
+      <button type="submit" class="button default" style="margin-left:.5rem;">
+        Generar entregas
+      </button>
+    </div>
+  </fieldset>
+</form>
+
+{% if generated is not None %}
+  <div class="module" style="margin-top: 1.5rem;">
+    <h2>Resultado para {{ target_date|date:"l d/m/Y" }}</h2>
+
+    {% if generated %}
+      <p><strong>✅ {{ generated|length }} entrega(s) generada(s):</strong></p>
+      <table>
+        <thead>
+          <tr>
+            <th>Contrato</th>
+            <th>Ubicación</th>
+            <th>Empresa</th>
+            <th>Contacto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for task in generated %}
+          <tr>
+            <td>{{ task.contract }}</td>
+            <td>{{ task.location }}</td>
+            <td>{{ task.location.company|default:"—" }}</td>
+            <td>{{ task.location.contact_name|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No se han generado entregas nuevas.</p>
+    {% endif %}
+
+    {% if skipped %}
+      <p style="margin-top:1rem;"><strong>⚠️ {{ skipped|length }} contrato(s) omitido(s):</strong></p>
+      <table>
+        <thead>
+          <tr><th>Contrato</th><th>Motivo</th></tr>
+        </thead>
+        <tbody>
+          {% for contract, reason in skipped %}
+          <tr>
+            <td>{{ contract }}</td>
+            <td>{{ reason }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+{% endif %}
+
+<div style="margin-top: 2rem;">
+  <a href="{% url 'admin:rutas_contract_changelist' %}" class="button">
+    ← Volver a Contratos
+  </a>
+</div>
+{% endblock %}

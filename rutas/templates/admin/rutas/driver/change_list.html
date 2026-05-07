@@ -1,0 +1,11 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+  <li>
+    <a href="{% url 'admin:rutas_driver_upload_excel' %}" class="addlink">Cargar Excel</a>
+  </li>
+  <li>
+    <a href="{% url 'admin:rutas_driver_download_excel_template' %}" class="addlink">Descargar Excel de prueba</a>
+  </li>
+  {{ block.super }}
+{% endblock %}

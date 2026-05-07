@@ -1,0 +1,15 @@
+{% extends "admin/change_list.html" %}
+{% block object-tools-items %}
+  <li>
+    <a href="{% url 'admin:rutas_contract_upload_excel' %}" class="addlink">Cargar Excel</a>
+  </li>
+  <li>
+    <a href="{% url 'admin:rutas_contract_download_excel_template' %}" class="addlink">Descargar Excel de prueba</a>
+  </li>
+  <li>
+    <a href="{% url 'admin:rutas_contract_generate_tasks' %}" class="addlink">
+      🧹 Generar limpiezas por día
+    </a>
+  </li>
+  {{ block.super }}
+{% endblock %}

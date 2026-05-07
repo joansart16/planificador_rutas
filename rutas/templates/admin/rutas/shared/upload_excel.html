@@ -1,0 +1,43 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+
+<p class="help">
+  Sube un archivo Excel <strong>.xlsx</strong> con las columnas exactas de la plantilla.
+</p>
+
+{% if excel_template_columns %}
+  <p class="help">
+    <strong>Columnas esperadas:</strong> {{ excel_template_columns|join:", " }}
+  </p>
+{% endif %}
+
+{% if excel_instructions %}
+  <div class="module" style="margin-bottom: 1rem;">
+    <h2>Ayuda de formato</h2>
+    <ul>
+      {% for item in excel_instructions %}
+        <li>{{ item }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<div class="submit-row" style="margin-bottom: 1rem;">
+  <a href="{{ template_url }}" class="button default">Descargar Excel de prueba</a>
+  <a href="{{ changelist_url }}" class="button">Volver al listado</a>
+</div>
+
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <fieldset class="module aligned">
+    {{ form.as_p }}
+  </fieldset>
+  <div class="submit-row">
+    <button type="submit" class="button default">Cargar Excel</button>
+  </div>
+</form>
+{% endblock %}
