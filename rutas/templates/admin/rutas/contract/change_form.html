@@ -1,14 +1,1 @@
 {% extends "admin/change_form.html" %}
-
-{% block extrahead %}
-  {{ block.super }}
-  {% if google_maps_api_key %}
-  <script>
-    window.GOOGLE_MAPS_API_KEY = "{{ google_maps_api_key }}";
-  </script>
-  <script
-    src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places&loading=async"
-    defer>
-  </script>
-  {% endif %}
-{% endblock %}

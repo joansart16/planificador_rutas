@@ -425,15 +425,15 @@ class ContractWithLocationForm(forms.ModelForm):
         label='Zona de Mallorca',
         help_text='Comarca o zona de la isla.',
     )
-    latitude = forms.DecimalField(
-        max_digits=9, decimal_places=6,
-        required=False,
-        label='Latitud',
+    coords_cabin = forms.CharField(
+        max_length=50, required=False,
+        label='Coordenadas cabina',
+        help_text='Pega desde Google Maps (ej: 39.619316, 2.643553).',
     )
-    longitude = forms.DecimalField(
-        max_digits=9, decimal_places=6,
-        required=False,
-        label='Longitud',
+    coords_entrance = forms.CharField(
+        max_length=50, required=False,
+        label='Coordenadas entrada finca',
+        help_text='Opcional. Si se rellena, el exportador genera una fila extra con "Entrada finca".',
     )
     max_vehicle_size = forms.TypedChoiceField(
         choices=Vehicle.Size.choices,
@@ -476,8 +476,8 @@ class ContractWithLocationForm(forms.ModelForm):
                 'municipality': loc.municipality,
                 'postal_code': loc.postal_code,
                 'zone': loc.zone,
-                'latitude': loc.latitude,
-                'longitude': loc.longitude,
+                'coords_cabin': loc.coords_cabin,
+                'coords_entrance': loc.coords_entrance,
                 'max_vehicle_size': loc.max_vehicle_size,
             })
 
@@ -739,17 +739,18 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
     excel_template_columns = [
         'nombre', 'empresa', 'contacto_nombre', 'contacto_telefono', 'direccion', 'comentario', 'poblacion',
         'municipio', 'codigo_postal', 'zona', 'cabinas', 'tipo_max_vehiculo', 'conductor_por_defecto',
-        'latitud', 'longitud',
+        'coords_cabina', 'coords_entrada',
     ]
     excel_template_rows = [[
         'Obra Son Vida', 'Empresa Demo', 'Miguel', '600123123', 'Calle Falsa 123', 'Ir con pickup o mpw',
         'Palma', 'Palma', '07010', 'PALMA', 1, 'Camión pequeño', 'Juan Pérez',
-        '39.595000', '2.650000',
+        '39.595000, 2.650000', '',
     ]]
     excel_instructions = [
         'tipo_max_vehiculo permitido: Pickup, Camión pequeño, Camión grande.',
         'zona permitida: PALMA, TRAMUNTANA, RAIGUER, PLA, MIGJORN, LLEVANT (opcional).',
         'empresa y conductor_por_defecto deben existir previamente o dejarse en blanco.',
+        'coords_cabina y coords_entrada: formato "lat, lon" (ej: 39.619316, 2.643553).',
     ]
     excel_value_guide = [
         ('nombre', 'Texto único', 'Nombre de la ubicación.'),
@@ -765,8 +766,8 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
         ('cabinas', 'Entero > 0', 'Número de cabinas de la ubicación.'),
         ('tipo_max_vehiculo', 'Pickup, Camión pequeño, Camión grande', 'Tipo máximo permitido en la ubicación.'),
         ('conductor_por_defecto', 'Nombre de conductor existente o vacío', 'Conductor habitual de la ubicación.'),
-        ('latitud', 'Decimal o vacío', 'Latitud geográfica.'),
-        ('longitud', 'Decimal o vacío', 'Longitud geográfica.'),
+        ('coords_cabina', '"lat, lon" o vacío', 'Coordenadas de la cabina (ej: 39.619316, 2.643553).'),
+        ('coords_entrada', '"lat, lon" o vacío', 'Coordenadas entrada finca. Si existe, genera fila extra en exportación.'),
     ]
     excel_validations = {
         'cabinas': ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
@@ -777,7 +778,7 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
     list_display   = (
         'name', 'company', 'default_driver_short', 'cabin_count_short',
         'contact_name_short', 'contact_phone_short',
-        'address_short', 'latitude_short', 'longitude_short', 'town_short', 'postal_code',
+        'address_short', 'coords_cabin_short', 'town_short', 'postal_code',
         'get_zone_label', 'get_max_size_label',
     )
     list_filter    = ('zone', 'max_vehicle_size', 'company')
@@ -796,25 +797,13 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
             'fields': ('contact_name', 'contact_phone', 'comment', 'cabin_count'),
             'description': 'Responsable de la ubicación.',
         }),
-        ('Dirección', {
-            'fields': ('address', 'latitude', 'longitude', 'town', 'municipality', 'postal_code', 'zone'),
-            'description': (
-                'Usa el buscador de Google Maps que aparece arriba para '
-                'autocompletar todos los campos.'
-            ),
+        ('Dirección y coordenadas', {
+            'fields': ('address', 'town', 'municipality', 'postal_code', 'zone', 'coords_cabin', 'coords_entrance'),
         }),
         ('Restricción de vehículo', {
             'fields': ('max_vehicle_size',),
         }),
     )
-
-    class Media:
-        js = ('rutas/admin/location_geocode.js',)
-
-    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
-        extra_context = extra_context or {}
-        extra_context['google_maps_api_key'] = settings.GOOGLE_MAPS_API_KEY
-        return super().changeform_view(request, object_id, form_url, extra_context)
 
     @admin.display(description='Zona', ordering='zone')
     def get_zone_label(self, obj: Location) -> str:
@@ -840,13 +829,9 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
     def address_short(self, obj: Location) -> str:
         return obj.address or '—'
 
-    @admin.display(description=mark_safe('<span title="Latitud">Lat.</span>'), ordering='latitude')
-    def latitude_short(self, obj: Location) -> str:
-        return str(obj.latitude) if obj.latitude is not None else '—'
-
-    @admin.display(description=mark_safe('<span title="Longitud">Lon.</span>'), ordering='longitude')
-    def longitude_short(self, obj: Location) -> str:
-        return str(obj.longitude) if obj.longitude is not None else '—'
+    @admin.display(description=mark_safe('<span title="Coordenadas cabina">Coords.</span>'), ordering='coords_cabin')
+    def coords_cabin_short(self, obj: Location) -> str:
+        return obj.coords_cabin or '—'
 
     @admin.display(description=mark_safe('<span title="Población">Población</span>'), ordering='town')
     def town_short(self, obj: Location) -> str:
@@ -896,8 +881,8 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
             'cabin_count': _parse_positive_int(row_data['cabinas'], default=1),
             'max_vehicle_size': max_vehicle_size,
             'default_driver': default_driver,
-            'latitude': _parse_decimal(row_data['latitud']),
-            'longitude': _parse_decimal(row_data['longitud']),
+            'coords_cabin': _as_text(row_data['coords_cabina']),
+            'coords_entrance': _as_text(row_data['coords_entrada']),
         }
         if not data['address']:
             raise ValueError('direccion es obligatorio.')
@@ -957,15 +942,18 @@ class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
     form = ContractWithLocationForm
     change_list_template = 'admin/rutas/contract/change_list.html'
     list_display   = (
-        '__str__', 'location', 'start_date', 'end_date',
+        'budget_number', '__str__', 'location', 'start_date', 'end_date',
         'cleaning_frequency', 'cleaning_days_badge', 'coherence_warning_badge', 'status',
     )
     list_filter    = ('status', 'location__zone', 'location__company', 'start_date')
-    search_fields  = ('location__name', 'location__company__name', 'location__town')
+    search_fields  = ('location__name', 'location__company__name', 'location__town', 'budget_number')
     date_hierarchy = 'start_date'
     inlines        = [ServiceTaskInline]
     actions        = ['delete_selected']
     fieldsets      = (
+        ('Presupuesto', {
+            'fields': ('budget_number',),
+        }),
         ('Identificación de la ubicación', {
             'fields': ('name', 'company', 'default_driver'),
         }),
@@ -973,11 +961,11 @@ class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
             'fields': ('contact_name', 'contact_phone', 'comment', 'cabin_count'),
             'description': 'Responsable de la ubicación.',
         }),
-        ('Dirección', {
-            'fields': ('address', 'latitude', 'longitude', 'town', 'municipality', 'postal_code', 'zone'),
+        ('Dirección y coordenadas', {
+            'fields': ('address', 'town', 'municipality', 'postal_code', 'zone', 'coords_cabin', 'coords_entrance'),
             'description': (
-                'Usa el buscador de Google Maps que aparece arriba para '
-                'autocompletar todos los campos.'
+                'Dirección textual de la ubicación. '
+                'Coordenadas: pega directamente desde Google Maps (ej: 39.619316, 2.643553).'
             ),
         }),
         ('Restricción de vehículo', {
@@ -1000,7 +988,7 @@ class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
     )
 
     class Media:
-        js = ('rutas/admin/contract_dates_tomorrow.js', 'rutas/admin/location_geocode.js')
+        js = ('rutas/admin/contract_dates_tomorrow.js',)
 
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         extra_context = extra_context or {}
@@ -1022,8 +1010,8 @@ class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
             'municipality': cd.get('municipality', ''),
             'postal_code': cd.get('postal_code', ''),
             'zone': cd.get('zone', ''),
-            'latitude': cd.get('latitude'),
-            'longitude': cd.get('longitude'),
+            'coords_cabin': cd.get('coords_cabin', ''),
+            'coords_entrance': cd.get('coords_entrance', ''),
             'max_vehicle_size': cd['max_vehicle_size'],
         }
         if obj.location_id:
@@ -1291,7 +1279,7 @@ class ReassignDriverForm(forms.Form):
 class ServiceTaskAdmin(admin.ModelAdmin):
     change_list_template = 'admin/rutas/servicetask/change_list.html'
     list_display   = (
-        'task_type', 'scheduled_date', 'location',
+        'budget_number_display', 'task_type', 'scheduled_date', 'location',
         'driver', 'vehicle', 'suggested_size_badge', 'contract',
     )
     list_filter    = (
@@ -1306,7 +1294,7 @@ class ServiceTaskAdmin(admin.ModelAdmin):
     )
     search_fields       = (
         'driver__name', 'location__name', 'location__company__name',
-        'location__town', 'vehicle__license_plate',
+        'location__town', 'vehicle__license_plate', 'contract__budget_number',
     )
     date_hierarchy      = 'scheduled_date'
     autocomplete_fields = ('driver', 'vehicle', 'location')
@@ -1345,7 +1333,8 @@ class ServiceTaskAdmin(admin.ModelAdmin):
                 sheet = workbook.active
                 sheet.title = 'Tareas'
                 headers = [
-                    'CLIENTE', 'POBLACION', 'ID EXTERNO', 'DIRECCION LINEA 2', 'DIRECCION',
+                    'CLIENTE', 'POBLACION', 'ID EXTERNO', 'Nº PRESUPUESTO',
+                    'DIRECCION LINEA 2', 'DIRECCION',
                     'LIMPIEZA', 'UNIDADES', 'COMENTARIOS', 'HORA', 'PERSONA DE REF.',
                     'TELÉFONO', 'EMAIL',
                 ]
@@ -1354,9 +1343,8 @@ class ServiceTaskAdmin(admin.ModelAdmin):
                 for task in tasks:
                     location = task.location
                     company = location.company if location else None
-                    lat = location.latitude if location else None
-                    lon = location.longitude if location else None
-                    geo_address = f'{lat}, {lon}' if lat is not None and lon is not None else ''
+                    coords = location.coords_cabin if location else ''
+                    budget_num = task.contract.budget_number if task.contract_id else ''
                     hour = ''
 
                     limpieza_value = ''
@@ -1378,12 +1366,13 @@ class ServiceTaskAdmin(admin.ModelAdmin):
                     elif task.task_type == ServiceTask.TaskType.RECOGIDA:
                         comments_value = 'RE'
 
-                    sheet.append([
+                    main_row = [
                         company.name if company else '',
                         (location.town or '').upper() if location else '',
                         location.name if location else '',
+                        budget_num,
                         location.address if location else '',
-                        geo_address,
+                        coords,
                         limpieza_value,
                         location.cabin_count if location else 1,
                         comments_value,
@@ -1391,7 +1380,15 @@ class ServiceTaskAdmin(admin.ModelAdmin):
                         location.contact_name if location else '',
                         location.contact_phone if location else '',
                         company.email if company else '',
-                    ])
+                    ]
+                    sheet.append(main_row)
+
+                    # Fila extra para la entrada de la finca (si existe)
+                    if location and location.coords_entrance:
+                        entrance_row = list(main_row)
+                        entrance_row[5] = location.coords_entrance  # DIRECCION
+                        entrance_row[8] = 'Entrada finca'           # COMENTARIOS
+                        sheet.append(entrance_row)
 
                 buffer = BytesIO()
                 workbook.save(buffer)
@@ -1414,6 +1411,12 @@ class ServiceTaskAdmin(admin.ModelAdmin):
                 'opts': self.model._meta,
             },
         )
+
+    @admin.display(description='Nº presupuesto', ordering='contract__budget_number')
+    def budget_number_display(self, obj: ServiceTask) -> str:
+        if obj.contract_id and obj.contract.budget_number:
+            return obj.contract.budget_number
+        return '—'
 
     @admin.display(description='Tam. sugerido', ordering='suggested_vehicle_size')
     def suggested_size_badge(self, obj: ServiceTask) -> str:

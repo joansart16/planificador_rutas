@@ -391,15 +391,15 @@ class Location(models.Model):
     )
 
     # ── Coordenadas ───────────────────────────────────────────────────
-    latitude  = models.DecimalField(
-        max_digits=9, decimal_places=6,
-        null=True, blank=True,
-        verbose_name='Latitud',
+    coords_cabin = models.CharField(
+        max_length=50, blank=True, default='',
+        verbose_name='Coordenadas cabina',
+        help_text='Pega directamente desde Google Maps (ej: 39.619316, 2.643553).',
     )
-    longitude = models.DecimalField(
-        max_digits=9, decimal_places=6,
-        null=True, blank=True,
-        verbose_name='Longitud',
+    coords_entrance = models.CharField(
+        max_length=50, blank=True, default='',
+        verbose_name='Coordenadas entrada finca',
+        help_text='Opcional. Si se rellena, el exportador genera una fila adicional con "Entrada finca".',
     )
 
     # ── Restricción de vehículo ───────────────────────────────────────
@@ -482,6 +482,11 @@ class Contract(models.Model):
         SATURDAY = 5, 'Sábado'
         SUNDAY = 6, 'Domingo'
 
+    budget_number = models.CharField(
+        max_length=50, blank=True, default='',
+        verbose_name='Nº presupuesto',
+        help_text='Número de presupuesto. Clave que identifica esta obra en el sistema.',
+    )
     location = models.ForeignKey(
         Location,
         on_delete=models.PROTECT,
