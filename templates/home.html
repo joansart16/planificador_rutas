@@ -167,13 +167,13 @@
     </div>
 
     <div class="lang-switcher">
-      <form action="/i18n/set_language/" method="post">
+      <form action="{% url 'set_language' %}" method="post">
         {% csrf_token %}
         <input type="hidden" name="language" value="es">
         <input type="hidden" name="next" value="/">
         <button type="submit">Español</button>
       </form>
-      <form action="/i18n/set_language/" method="post">
+      <form action="{% url 'set_language' %}" method="post">
         {% csrf_token %}
         <input type="hidden" name="language" value="ca">
         <input type="hidden" name="next" value="/">
