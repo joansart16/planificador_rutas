@@ -17,7 +17,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from .models import Company, Contract, Driver, DriverUnavailability, Location, Route, ServiceTask, Vehicle
+from .models import Company, Contract, Driver, DriverUnavailability, Location, Route, RouteStop, ServiceTask, Vehicle
 
 
 ROUTES_MENU_ORDER = {
@@ -25,8 +25,8 @@ ROUTES_MENU_ORDER = {
     'Driver': 2,
     'Company': 3,
     'Contract': 4,
-    'Route': 5,
-    'ServiceTask': 6,
+    'ServiceTask': 5,
+    'Route': 6,
 }
 
 MODULE_OBRA   = 'OBRA'
@@ -1283,17 +1283,16 @@ import json as _json
 
 
 class RouteStopInline(admin.TabularInline):
-    model   = ServiceTask
-    fk_name = 'route'
-    extra   = 0
-    fields  = ('route_order', 'task_type', 'scheduled_date', 'location', 'driver', 'vehicle')
-    readonly_fields = ('task_type', 'scheduled_date', 'location')
-    ordering = ('route_order',)
-    verbose_name        = 'Parada'
-    verbose_name_plural = 'Paradas asignadas'
+    model   = RouteStop
+    extra   = 1
+    fields  = ('order', 'task')
+    autocomplete_fields = ('task',)
+    ordering = ('order',)
+    verbose_name        = 'Mantenimiento'
+    verbose_name_plural = 'Mantenimientos de la ruta'
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('location', 'driver', 'vehicle')
+        return super().get_queryset(request).select_related('task__location', 'task__contract')
 
 
 @admin.register(Route)
@@ -1349,16 +1348,18 @@ class RouteAdmin(ModuleFilterMixin, admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
     def mapa_view(self, request, pk: int):
+        from django.http import JsonResponse
         route = Route.objects.select_related('driver', 'vehicle').get(pk=pk)
 
-        stops_qs = (
-            ServiceTask.objects.filter(route=route)
-            .select_related('location__company', 'contract')
-            .order_by('route_order', 'pk')
+        route_stops = (
+            RouteStop.objects.filter(route=route)
+            .select_related('task__location__company', 'task__contract')
+            .order_by('order', 'pk')
         )
 
         stops = []
-        for task in stops_qs:
+        for rs in route_stops:
+            task = rs.task
             lat = lng = ''
             has_coords = False
             if task.location and task.location.coords_cabin:
@@ -1369,15 +1370,16 @@ class RouteAdmin(ModuleFilterMixin, admin.ModelAdmin):
                     has_coords = True
                 except (ValueError, IndexError):
                     pass
-            stops.append({'task': task, 'lat': lat, 'lng': lng, 'has_coords': has_coords})
+            stops.append({'stop': rs, 'task': task, 'lat': lat, 'lng': lng, 'has_coords': has_coords})
 
-        # Unassigned tasks for the same date + module
+        # Tasks del mismo día/módulo sin RouteStop para esta ruta
+        assigned_task_ids = RouteStop.objects.filter(route=route).values_list('task_id', flat=True)
         unassigned = (
             ServiceTask.objects.filter(
                 scheduled_date=route.date,
                 contract__module=route.module,
-                route__isnull=True,
             )
+            .exclude(pk__in=assigned_task_ids)
             .select_related('location', 'contract')
             .order_by('location__name')
         )
@@ -1392,42 +1394,39 @@ class RouteAdmin(ModuleFilterMixin, admin.ModelAdmin):
                 'date': route.date,
                 'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
                 'opts': Route._meta,
-                'csrf_token': request.META.get('CSRF_COOKIE', ''),
             },
         )
 
     def reorder_view(self, request, pk: int):
-        if request.method != 'POST':
-            from django.http import JsonResponse
-            return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
         from django.http import JsonResponse
+        if request.method != 'POST':
+            return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
         try:
             data = _json.loads(request.body)
-            order = data.get('order', [])
-            for i, task_id in enumerate(order, start=1):
-                ServiceTask.objects.filter(pk=int(task_id), route_id=pk).update(route_order=i)
+            # order is a list of RouteStop PKs
+            for i, stop_id in enumerate(data.get('order', []), start=1):
+                RouteStop.objects.filter(pk=int(stop_id), route_id=pk).update(order=i)
             return JsonResponse({'ok': True})
         except Exception as exc:
             return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
 
     def add_stop_view(self, request, pk: int):
-        if request.method != 'POST':
-            from django.http import JsonResponse
-            return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
         from django.http import JsonResponse
+        if request.method != 'POST':
+            return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
         try:
             data = _json.loads(request.body)
             task_id = int(data['task_id'])
             route = Route.objects.get(pk=pk)
             task = ServiceTask.objects.get(pk=task_id)
-            # Auto-assign next order number
-            current_max = ServiceTask.objects.filter(route=route).aggregate(
-                m=Max('route_order')
-            )['m'] or 0
-            task.route = route
-            task.route_order = current_max + 1
-            task.save(update_fields=['route', 'route_order'])
-            return JsonResponse({'ok': True, 'route_order': task.route_order})
+            current_max = RouteStop.objects.filter(route=route).aggregate(m=Max('order'))['m'] or 0
+            rs, created = RouteStop.objects.get_or_create(
+                route=route, task=task,
+                defaults={'order': current_max + 1},
+            )
+            if not created:
+                return JsonResponse({'ok': False, 'error': 'Este mantenimiento ya está en la ruta.'}, status=400)
+            return JsonResponse({'ok': True, 'stop_id': rs.pk, 'order': rs.order})
         except Exception as exc:
             return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
 
@@ -1509,7 +1508,6 @@ class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
         'location__zone',
         'location__company',
         'contract__status',
-        'route',
         PendingAssignmentFilter,
     )
     search_fields       = (
@@ -1517,8 +1515,8 @@ class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
         'location__town', 'vehicle__license_plate', 'contract__budget_number',
     )
     date_hierarchy      = 'scheduled_date'
-    autocomplete_fields = ('driver', 'vehicle', 'location', 'route')
-    list_select_related = ('driver', 'vehicle', 'location', 'contract', 'route')
+    autocomplete_fields = ('driver', 'vehicle', 'location')
+    list_select_related = ('driver', 'vehicle', 'location', 'contract')
     actions             = ['delete_selected', 'reassign_driver_action']
 
     def get_urls(self):
@@ -1648,17 +1646,17 @@ class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
             return '—'
         return obj.get_suggested_vehicle_size_display()
 
-    @admin.display(description='Ruta', ordering='route__date')
+    @admin.display(description='Ruta')
     def route_badge(self, obj: ServiceTask) -> str:
-        if not obj.route_id:
+        stop = obj.route_stops.select_related('route').first()
+        if not stop:
             return '—'
-        url = reverse('admin:rutas_route_mapa', args=[obj.route_id])
-        label = f'#{obj.route_order or "?"}' if obj.route_order else ''
+        url = reverse('admin:rutas_route_mapa', args=[stop.route_id])
         return format_html(
-            '<a href="{}" title="{}">{} 🗺️</a>',
+            '<a href="{}" title="{}">#{} 🗺️</a>',
             url,
-            str(obj.route),
-            label,
+            str(stop.route),
+            stop.order,
         )
 
     # ------------------------------------------------------------------

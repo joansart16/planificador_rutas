@@ -145,7 +145,7 @@
       {% for stop in stops %}
       <div class="stop-card"
            draggable="true"
-           data-id="{{ stop.task.pk }}"
+           data-id="{{ stop.stop.pk }}"
            data-lat="{{ stop.lat }}"
            data-lng="{{ stop.lng }}"
            data-has-coords="{{ stop.has_coords|yesno:'true,false' }}">
@@ -378,7 +378,7 @@
       const div = document.createElement('div');
       div.className = 'stop-card';
       div.draggable = true;
-      div.dataset.id = taskId;
+      div.dataset.id = data.stop_id;  // RouteStop PK (for reorder)
       div.dataset.lat = lat;
       div.dataset.lng = lng;
       div.dataset.hasCoords = hasCoords;

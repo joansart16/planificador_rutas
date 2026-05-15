@@ -635,7 +635,7 @@ class Route(models.Model):
         return ' · '.join(parts)
 
 
-class ServiceTask(models.Model):
+class ServiceTask(models.Model):  # forward declaration — RouteStop is defined below
     """
     Tarea de servicio diario. Aplica las Reglas de Oro en clean():
 
@@ -654,16 +654,6 @@ class ServiceTask(models.Model):
         max_length=10, choices=TaskType.choices, verbose_name='Tipo de tarea'
     )
     scheduled_date = models.DateField(verbose_name='Fecha programada')
-    route          = models.ForeignKey(
-        Route, on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name='stops', verbose_name='Ruta',
-    )
-    route_order    = models.PositiveIntegerField(
-        null=True, blank=True,
-        verbose_name='Orden en ruta',
-        help_text='Posición dentro de la ruta (1 = primero). Se asigna automáticamente al añadir.',
-    )
     driver         = models.ForeignKey(
         Driver, on_delete=models.PROTECT,
         null=True, blank=True,
@@ -791,3 +781,30 @@ class ServiceTask(models.Model):
 
         if errors:
             raise ValidationError(errors)
+
+
+class RouteStop(models.Model):
+    """Mantenimiento assignat a una ruta, amb el seu ordre de visita."""
+
+    route = models.ForeignKey(
+        Route, on_delete=models.CASCADE,
+        related_name='stops', verbose_name='Ruta',
+    )
+    task = models.ForeignKey(
+        ServiceTask, on_delete=models.CASCADE,
+        related_name='route_stops', verbose_name='Mantenimiento',
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Orden',
+        help_text='Posición en la ruta (1 = primera parada).',
+    )
+
+    class Meta:
+        verbose_name        = 'Mantenimiento de la ruta'
+        verbose_name_plural = 'Mantenimientos de la ruta'
+        ordering            = ['order', 'pk']
+        unique_together     = [['route', 'task']]
+
+    def __str__(self) -> str:
+        return f"{self.order}. {self.task}"
