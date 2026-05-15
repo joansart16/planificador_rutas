@@ -1286,13 +1286,31 @@ class RouteStopInline(admin.TabularInline):
     model   = RouteStop
     extra   = 1
     fields  = ('order', 'task')
-    autocomplete_fields = ('task',)
     ordering = ('order',)
     verbose_name        = 'Mantenimiento'
     verbose_name_plural = 'Mantenimientos de la ruta'
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('task__location', 'task__contract')
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'task':
+            route_id = request.resolver_match.kwargs.get('object_id')
+            if route_id:
+                try:
+                    route = Route.objects.get(pk=route_id)
+                    kwargs['queryset'] = (
+                        ServiceTask.objects
+                        .filter(scheduled_date=route.date, contract__module=route.module)
+                        .select_related('location', 'contract')
+                        .order_by('location__name', 'task_type')
+                    )
+                except Route.DoesNotExist:
+                    kwargs['queryset'] = ServiceTask.objects.none()
+            else:
+                # New route not saved yet — no date known, show nothing
+                kwargs['queryset'] = ServiceTask.objects.none()
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 @admin.register(Route)
