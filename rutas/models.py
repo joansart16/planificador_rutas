@@ -593,6 +593,48 @@ class Contract(models.Model):
             raise ValidationError(errors)
 
 
+class Route(models.Model):
+    """Ruta de un día: agrupa mantenimientos asignados a un conductor y vehículo."""
+
+    date    = models.DateField(verbose_name='Fecha')
+    module  = models.CharField(
+        max_length=10,
+        choices=Contract.Module.choices,
+        default=Contract.Module.OBRA,
+        verbose_name='Módulo',
+    )
+    driver  = models.ForeignKey(
+        Driver, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='routes', verbose_name='Conductor',
+    )
+    vehicle = models.ForeignKey(
+        Vehicle, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='routes', verbose_name='Vehículo',
+    )
+    name = models.CharField(
+        max_length=100, blank=True, default='',
+        verbose_name='Nombre / alias',
+        help_text='Opcional. Ej: Ruta Norte, Ruta Sur.',
+    )
+
+    class Meta:
+        verbose_name        = 'Ruta'
+        verbose_name_plural = 'Rutas'
+        ordering            = ['-date', 'driver__name']
+
+    def __str__(self) -> str:
+        parts = [str(self.date)]
+        if self.driver_id:
+            parts.append(self.driver.name)
+        if self.vehicle_id:
+            parts.append(str(self.vehicle))
+        if self.name:
+            parts.append(f'({self.name})')
+        return ' · '.join(parts)
+
+
 class ServiceTask(models.Model):
     """
     Tarea de servicio diario. Aplica las Reglas de Oro en clean():
@@ -612,6 +654,16 @@ class ServiceTask(models.Model):
         max_length=10, choices=TaskType.choices, verbose_name='Tipo de tarea'
     )
     scheduled_date = models.DateField(verbose_name='Fecha programada')
+    route          = models.ForeignKey(
+        Route, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='stops', verbose_name='Ruta',
+    )
+    route_order    = models.PositiveIntegerField(
+        null=True, blank=True,
+        verbose_name='Orden en ruta',
+        help_text='Posición dentro de la ruta (1 = primero). Se asigna automáticamente al añadir.',
+    )
     driver         = models.ForeignKey(
         Driver, on_delete=models.PROTECT,
         null=True, blank=True,

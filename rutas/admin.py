@@ -5,7 +5,7 @@ from io import BytesIO
 from django import forms
 from django.conf import settings
 from django.contrib import admin, messages
-from django.db.models import Count, Q
+from django.db.models import Count, Max, Q
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
@@ -17,7 +17,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from .models import Company, Contract, Driver, DriverUnavailability, Location, ServiceTask, Vehicle
+from .models import Company, Contract, Driver, DriverUnavailability, Location, Route, ServiceTask, Vehicle
 
 
 ROUTES_MENU_ORDER = {
@@ -25,7 +25,8 @@ ROUTES_MENU_ORDER = {
     'Driver': 2,
     'Company': 3,
     'Contract': 4,
-    'ServiceTask': 5,
+    'Route': 5,
+    'ServiceTask': 6,
 }
 
 MODULE_OBRA   = 'OBRA'
@@ -1276,6 +1277,162 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Route
+# ──────────────────────────────────────────────────────────────────────────────
+import json as _json
+
+
+class RouteStopInline(admin.TabularInline):
+    model   = ServiceTask
+    fk_name = 'route'
+    extra   = 0
+    fields  = ('route_order', 'task_type', 'scheduled_date', 'location', 'driver', 'vehicle')
+    readonly_fields = ('task_type', 'scheduled_date', 'location')
+    ordering = ('route_order',)
+    verbose_name        = 'Parada'
+    verbose_name_plural = 'Paradas asignadas'
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('location', 'driver', 'vehicle')
+
+
+@admin.register(Route)
+class RouteAdmin(ModuleFilterMixin, admin.ModelAdmin):
+    _module_field = 'module'
+
+    list_display   = ('date', 'module', 'driver', 'vehicle', 'name', 'stop_count', 'map_link')
+    list_filter    = ('date', 'module', 'driver', 'vehicle')
+    search_fields  = ('driver__name', 'vehicle__license_plate', 'name')
+    date_hierarchy = 'date'
+    inlines        = [RouteStopInline]
+    autocomplete_fields = ('driver', 'vehicle')
+    fieldsets = (
+        (None, {'fields': ('date', 'module', 'driver', 'vehicle', 'name')}),
+    )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        extra = [
+            path(
+                '<int:pk>/mapa/',
+                self.admin_site.admin_view(self.mapa_view),
+                name='rutas_route_mapa',
+            ),
+            path(
+                '<int:pk>/reorder/',
+                self.admin_site.admin_view(self.reorder_view),
+                name='rutas_route_reorder',
+            ),
+            path(
+                '<int:pk>/add-stop/',
+                self.admin_site.admin_view(self.add_stop_view),
+                name='rutas_route_add_stop',
+            ),
+        ]
+        return extra + urls
+
+    @admin.display(description='Paradas', ordering='stop_count')
+    def stop_count(self, obj: Route) -> int:
+        return obj.stop_count
+
+    @admin.display(description='Mapa')
+    def map_link(self, obj: Route) -> str:
+        url = reverse('admin:rutas_route_mapa', args=[obj.pk])
+        return format_html('<a href="{}" target="_blank">🗺️ Ver mapa</a>', url)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(stop_count=Count('stops'))
+
+    def save_model(self, request, obj, form, change):
+        if not change and not obj.module:
+            obj.module = _current_module(request)
+        super().save_model(request, obj, form, change)
+
+    def mapa_view(self, request, pk: int):
+        route = Route.objects.select_related('driver', 'vehicle').get(pk=pk)
+
+        stops_qs = (
+            ServiceTask.objects.filter(route=route)
+            .select_related('location__company', 'contract')
+            .order_by('route_order', 'pk')
+        )
+
+        stops = []
+        for task in stops_qs:
+            lat = lng = ''
+            has_coords = False
+            if task.location and task.location.coords_cabin:
+                try:
+                    parts = task.location.coords_cabin.split(',')
+                    lat, lng = parts[0].strip(), parts[1].strip()
+                    float(lat); float(lng)
+                    has_coords = True
+                except (ValueError, IndexError):
+                    pass
+            stops.append({'task': task, 'lat': lat, 'lng': lng, 'has_coords': has_coords})
+
+        # Unassigned tasks for the same date + module
+        unassigned = (
+            ServiceTask.objects.filter(
+                scheduled_date=route.date,
+                contract__module=route.module,
+                route__isnull=True,
+            )
+            .select_related('location', 'contract')
+            .order_by('location__name')
+        )
+
+        return TemplateResponse(
+            request,
+            'admin/rutas/route/mapa.html',
+            {
+                'route': route,
+                'stops': stops,
+                'unassigned': unassigned,
+                'date': route.date,
+                'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
+                'opts': Route._meta,
+                'csrf_token': request.META.get('CSRF_COOKIE', ''),
+            },
+        )
+
+    def reorder_view(self, request, pk: int):
+        if request.method != 'POST':
+            from django.http import JsonResponse
+            return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+        from django.http import JsonResponse
+        try:
+            data = _json.loads(request.body)
+            order = data.get('order', [])
+            for i, task_id in enumerate(order, start=1):
+                ServiceTask.objects.filter(pk=int(task_id), route_id=pk).update(route_order=i)
+            return JsonResponse({'ok': True})
+        except Exception as exc:
+            return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
+
+    def add_stop_view(self, request, pk: int):
+        if request.method != 'POST':
+            from django.http import JsonResponse
+            return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+        from django.http import JsonResponse
+        try:
+            data = _json.loads(request.body)
+            task_id = int(data['task_id'])
+            route = Route.objects.get(pk=pk)
+            task = ServiceTask.objects.get(pk=task_id)
+            # Auto-assign next order number
+            current_max = ServiceTask.objects.filter(route=route).aggregate(
+                m=Max('route_order')
+            )['m'] or 0
+            task.route = route
+            task.route_order = current_max + 1
+            task.save(update_fields=['route', 'route_order'])
+            return JsonResponse({'ok': True, 'route_order': task.route_order})
+        except Exception as exc:
+            return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Filtro personalizado: fecha concreta de tarea
 # ──────────────────────────────────────────────────────────────────────────────
 class ScheduledDateFilter(admin.SimpleListFilter):
@@ -1342,7 +1499,7 @@ class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
     change_list_template = 'admin/rutas/servicetask/change_list.html'
     list_display   = (
         'budget_number_display', 'task_type', 'scheduled_date', 'location',
-        'driver', 'vehicle', 'suggested_size_badge', 'contract',
+        'driver', 'vehicle', 'suggested_size_badge', 'route_badge', 'contract',
     )
     list_filter    = (
         'task_type',
@@ -1352,6 +1509,7 @@ class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
         'location__zone',
         'location__company',
         'contract__status',
+        'route',
         PendingAssignmentFilter,
     )
     search_fields       = (
@@ -1359,8 +1517,8 @@ class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
         'location__town', 'vehicle__license_plate', 'contract__budget_number',
     )
     date_hierarchy      = 'scheduled_date'
-    autocomplete_fields = ('driver', 'vehicle', 'location')
-    list_select_related = ('driver', 'vehicle', 'location', 'contract')
+    autocomplete_fields = ('driver', 'vehicle', 'location', 'route')
+    list_select_related = ('driver', 'vehicle', 'location', 'contract', 'route')
     actions             = ['delete_selected', 'reassign_driver_action']
 
     def get_urls(self):
@@ -1489,6 +1647,19 @@ class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
         if obj.suggested_vehicle_size is None:
             return '—'
         return obj.get_suggested_vehicle_size_display()
+
+    @admin.display(description='Ruta', ordering='route__date')
+    def route_badge(self, obj: ServiceTask) -> str:
+        if not obj.route_id:
+            return '—'
+        url = reverse('admin:rutas_route_mapa', args=[obj.route_id])
+        label = f'#{obj.route_order or "?"}' if obj.route_order else ''
+        return format_html(
+            '<a href="{}" title="{}">{} 🗺️</a>',
+            url,
+            str(obj.route),
+            label,
+        )
 
     # ------------------------------------------------------------------
     # Admin Action · Reasignación masiva de conductor
