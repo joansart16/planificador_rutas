@@ -390,6 +390,11 @@ class ContractWithLocationForm(forms.ModelForm):
         max_length=20, required=False,
         label='Teléfono de contacto',
     )
+    email = forms.EmailField(
+        required=False,
+        label='Email contacto obra',
+        help_text='Opcional. Si se rellena, se usa en el exportador en lugar del email del cliente.',
+    )
     comment = forms.CharField(
         widget=forms.Textarea(attrs={'rows': 3}),
         required=False,
@@ -469,6 +474,7 @@ class ContractWithLocationForm(forms.ModelForm):
                 'default_driver': loc.default_driver_id,
                 'contact_name': loc.contact_name,
                 'contact_phone': loc.contact_phone,
+                'email': loc.email,
                 'comment': loc.comment,
                 'cabin_count': loc.cabin_count,
                 'address': loc.address,
@@ -737,12 +743,14 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
     change_list_template = 'admin/rutas/location/change_list.html'
     excel_template_filename = 'ubicaciones_plantilla.xlsx'
     excel_template_columns = [
-        'nombre', 'empresa', 'contacto_nombre', 'contacto_telefono', 'direccion', 'comentario', 'poblacion',
-        'municipio', 'codigo_postal', 'zona', 'cabinas', 'tipo_max_vehiculo', 'conductor_por_defecto',
+        'nombre', 'empresa', 'contacto_nombre', 'contacto_telefono', 'email_obra',
+        'direccion', 'comentario', 'poblacion', 'municipio', 'codigo_postal', 'zona',
+        'cabinas', 'tipo_max_vehiculo', 'conductor_por_defecto',
         'coords_cabina', 'coords_entrada',
     ]
     excel_template_rows = [[
-        'Obra Son Vida', 'Empresa Demo', 'Miguel', '600123123', 'Calle Falsa 123', 'Ir con pickup o mpw',
+        'Obra Son Vida', 'Empresa Demo', 'Miguel', '600123123', 'obra@demo.com',
+        'Calle Falsa 123', 'Ir con pickup o mpw',
         'Palma', 'Palma', '07010', 'PALMA', 1, 'Camión pequeño', 'Juan Pérez',
         '39.595000, 2.650000', '',
     ]]
@@ -751,12 +759,14 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
         'zona permitida: PALMA, TRAMUNTANA, RAIGUER, PLA, MIGJORN, LLEVANT (opcional).',
         'empresa y conductor_por_defecto deben existir previamente o dejarse en blanco.',
         'coords_cabina y coords_entrada: formato "lat, lon" (ej: 39.619316, 2.643553).',
+        'email_obra: opcional, sobreescribe el email del cliente en el exportador.',
     ]
     excel_value_guide = [
         ('nombre', 'Texto único', 'Nombre de la ubicación.'),
         ('empresa', 'Razón social existente o vacío', 'Empresa titular de la ubicación.'),
         ('contacto_nombre', 'Texto libre', 'Persona de contacto en obra.'),
         ('contacto_telefono', 'Texto libre', 'Teléfono de contacto.'),
+        ('email_obra', 'Email válido o vacío', 'Email de la ubicación. Si se rellena, se usa en lugar del email del cliente.'),
         ('direccion', 'Texto libre', 'Calle y número.'),
         ('comentario', 'Texto libre', 'Comentario operativo de la ubicación.'),
         ('poblacion', 'Texto libre', 'Población.'),
@@ -794,7 +804,7 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
             'fields': ('name', 'company', 'default_driver'),
         }),
         ('Contacto en obra', {
-            'fields': ('contact_name', 'contact_phone', 'comment', 'cabin_count'),
+            'fields': ('contact_name', 'contact_phone', 'email', 'comment', 'cabin_count'),
             'description': 'Responsable de la ubicación.',
         }),
         ('Dirección y coordenadas', {
@@ -879,6 +889,7 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
             'postal_code': _as_text(row_data['codigo_postal']),
             'zone': zone or '',
             'cabin_count': _parse_positive_int(row_data['cabinas'], default=1),
+            'email': _as_text(row_data['email_obra']),
             'max_vehicle_size': max_vehicle_size,
             'default_driver': default_driver,
             'coords_cabin': _as_text(row_data['coords_cabina']),
@@ -932,11 +943,11 @@ class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
         ('dias_limpieza', '0..6 separados por coma', '0=Lunes, 1=Martes, 2=Miércoles, 3=Jueves, 4=Viernes, 5=Sábado, 6=Domingo.'),
         ('hora_acceso_inicio', 'HH:MM o vacío', 'Hora mínima de acceso.'),
         ('hora_acceso_fin', 'HH:MM o vacío', 'Hora máxima de acceso.'),
-        ('estado', 'Activo o Cerrado', 'Estado administrativo del contrato.'),
+        ('estado', 'Activo, Interrumpido o Retirado', 'Estado administrativo del pedido.'),
     ]
     excel_validations = {
         'limpiezas_semana': ['1', '2', '3', '4', '5', '6', '7'],
-        'estado': ['Activo', 'Cerrado'],
+        'estado': ['Activo', 'Interrumpido', 'Retirado'],
     }
 
     form = ContractWithLocationForm
@@ -958,7 +969,7 @@ class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
             'fields': ('name', 'company', 'default_driver'),
         }),
         ('Contacto en obra', {
-            'fields': ('contact_name', 'contact_phone', 'comment', 'cabin_count'),
+            'fields': ('contact_name', 'contact_phone', 'email', 'comment', 'cabin_count'),
             'description': 'Responsable de la ubicación.',
         }),
         ('Dirección y coordenadas', {
@@ -1003,6 +1014,7 @@ class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
             'default_driver': cd.get('default_driver'),
             'contact_name': cd.get('contact_name', ''),
             'contact_phone': cd.get('contact_phone', ''),
+            'email': cd.get('email', ''),
             'comment': cd.get('comment', ''),
             'cabin_count': cd.get('cabin_count', 1),
             'address': cd['address'],
@@ -1366,6 +1378,7 @@ class ServiceTaskAdmin(admin.ModelAdmin):
                     elif task.task_type == ServiceTask.TaskType.RECOGIDA:
                         comments_value = 'RE'
 
+                    contact_email = (location.email if location and location.email else '') or (company.email if company else '')
                     main_row = [
                         company.name if company else '',
                         (location.town or '').upper() if location else '',
@@ -1379,7 +1392,7 @@ class ServiceTaskAdmin(admin.ModelAdmin):
                         hour,
                         location.contact_name if location else '',
                         location.contact_phone if location else '',
-                        company.email if company else '',
+                        contact_email,
                     ]
                     sheet.append(main_row)
 

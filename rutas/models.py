@@ -145,8 +145,8 @@ class Company(models.Model):
 
     name  = models.CharField(max_length=200, unique=True, verbose_name='Razón social')
     email = models.EmailField(
-        blank=True, default='',
         verbose_name='Correo electrónico',
+        help_text='Obligatorio. Se usa como fallback en el exportador cuando la ubicación no tiene email propio.',
     )
 
     class Meta:
@@ -354,6 +354,11 @@ class Location(models.Model):
         max_length=20, blank=True, default='',
         verbose_name='Teléfono de contacto',
     )
+    email = models.EmailField(
+        blank=True, default='',
+        verbose_name='Email contacto obra',
+        help_text='Opcional. Si se rellena, se usa en el exportador en lugar del email del cliente.',
+    )
     comment = models.TextField(
         blank=True,
         default='',
@@ -470,8 +475,9 @@ class Contract(models.Model):
     """
 
     class Status(models.TextChoices):
-        ACTIVE = 'ACTIVE', 'Activo'
-        CLOSED = 'CLOSED', 'Cerrado'
+        ACTIVE      = 'ACTIVE',       'Activo'
+        INTERRUPTED = 'INTERRUPTED',  'Interrumpido'
+        RETIRED     = 'RETIRED',      'Retirado'
 
     class Weekday(models.IntegerChoices):
         MONDAY = 0, 'Lunes'
@@ -521,21 +527,21 @@ class Contract(models.Model):
         help_text='Última hora permitida de acceso al sitio.',
     )
     status = models.CharField(
-        max_length=10,
+        max_length=15,
         choices=Status.choices,
         default=Status.ACTIVE,
         verbose_name='Estado',
     )
 
     class Meta:
-        verbose_name        = 'Contrato'
-        verbose_name_plural = 'Contratos'
+        verbose_name        = 'Pedido'
+        verbose_name_plural = 'Pedidos'
         ordering            = ['-start_date']
 
     def __str__(self) -> str:
         location_str = self.location if self.location_id else '?'
         end_str = str(self.end_date) if self.end_date else '…'
-        return f"Contrato #{self.pk} · {location_str} ({self.start_date} → {end_str})"
+        return f"Pedido #{self.pk} · {location_str} ({self.start_date} → {end_str})"
 
     def clean(self) -> None:
         errors = {}
