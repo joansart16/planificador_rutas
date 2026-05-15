@@ -28,6 +28,36 @@ ROUTES_MENU_ORDER = {
     'ServiceTask': 5,
 }
 
+MODULE_OBRA   = 'OBRA'
+MODULE_EVENTO = 'EVENTO'
+
+
+def _current_module(request) -> str:
+    """Returns the active module from the session, defaulting to OBRA."""
+    return request.session.get('current_module', MODULE_OBRA)
+
+
+def _user_allowed_modules(user) -> list[str]:
+    if user.is_superuser:
+        return [MODULE_OBRA, MODULE_EVENTO]
+    if user.groups.filter(name='operadores_obra').exists():
+        return [MODULE_OBRA]
+    return [MODULE_OBRA]  # safe default
+
+
+class ModuleFilterMixin:
+    """Mixin that restricts querysets to the current session module."""
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        module = _current_module(request)
+        allowed = _user_allowed_modules(request.user)
+        if module not in allowed:
+            module = allowed[0]
+        return qs.filter(**{self._module_field: module})
+
+    _module_field = 'module'  # override in subclasses if needed
+
 
 _original_get_app_list = admin.AdminSite.get_app_list
 
@@ -48,6 +78,10 @@ def _get_app_list_with_custom_rutas_order(self, request, app_label=None):
 
 
 admin.AdminSite.get_app_list = _get_app_list_with_custom_rutas_order
+
+admin.site.site_header = 'Loorent · Planificador de Rutas'
+admin.site.site_title  = 'Loorent'
+admin.site.index_title = 'Panel de control'
 
 
 class ExcelUploadForm(forms.Form):
@@ -448,6 +482,12 @@ class ContractWithLocationForm(forms.ModelForm):
     )
 
     # ── Campos de Contrato ────────────────────────────────────────────────────
+    module = forms.ChoiceField(
+        choices=Contract.Module.choices,
+        initial=Contract.Module.OBRA,
+        label='Módulo',
+        help_text='Obra o Evento.',
+    )
     cleaning_weekdays = forms.TypedMultipleChoiceField(
         label='Días de limpieza (lunes a domingo)',
         choices=Contract.Weekday.choices,
@@ -921,7 +961,8 @@ class ServiceTaskInline(admin.TabularInline):
 # Contract
 # ──────────────────────────────────────────────────────────────────────────────
 @admin.register(Contract)
-class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
+class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin):
+    _module_field = 'module'
     excel_template_filename = 'contratos_plantilla.xlsx'
     excel_template_columns = [
         'ubicacion', 'fecha_inicio', 'fecha_fin', 'limpiezas_semana', 'dias_limpieza',
@@ -962,6 +1003,10 @@ class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
     inlines        = [ServiceTaskInline]
     actions        = ['delete_selected']
     fieldsets      = (
+        ('Módulo', {
+            'fields': ('module',),
+            'description': 'Indica si este pedido pertenece a Obra o a Evento.',
+        }),
         ('Presupuesto', {
             'fields': ('budget_number',),
         }),
@@ -1007,6 +1052,9 @@ class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     def save_model(self, request, obj, form, change):
+        # Auto-set module from session when creating a new contract
+        if not change and not obj.module:
+            obj.module = _current_module(request)
         cd = form.cleaned_data
         location_data = {
             'name': cd['name'],
@@ -1157,6 +1205,7 @@ class ContractAdmin(ExcelImportExportMixin, admin.ModelAdmin):
                 weekday = target_date.weekday()
                 contracts = Contract.objects.filter(
                     status=Contract.Status.ACTIVE,
+                    module=_current_module(request),
                     start_date__lte=target_date,
                     cleaning_weekdays__contains=weekday,
                 ).filter(
@@ -1288,7 +1337,8 @@ class ReassignDriverForm(forms.Form):
 # ServiceTask
 # ──────────────────────────────────────────────────────────────────────────────
 @admin.register(ServiceTask)
-class ServiceTaskAdmin(admin.ModelAdmin):
+class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
+    _module_field = 'contract__module'
     change_list_template = 'admin/rutas/servicetask/change_list.html'
     list_display   = (
         'budget_number_display', 'task_type', 'scheduled_date', 'location',
@@ -1336,7 +1386,10 @@ class ServiceTaskAdmin(admin.ModelAdmin):
                 self.message_user(request, 'Fecha no válida.', messages.ERROR)
             else:
                 tasks = (
-                    ServiceTask.objects.filter(scheduled_date=target_date)
+                    ServiceTask.objects.filter(
+                        scheduled_date=target_date,
+                        contract__module=_current_module(request),
+                    )
                     .select_related('location__company', 'contract')
                     .order_by('location__company__name', 'location__name', 'task_type')
                 )

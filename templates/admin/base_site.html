@@ -1,0 +1,138 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ title }} · Loorent{% endblock %}
+
+{% block branding %}
+<div id="site-name" style="display:flex;align-items:center;gap:1rem;">
+  <a href="/" style="color:#fff;text-decoration:none;font-size:1.05rem;font-weight:700;letter-spacing:.02em;">
+    Loorent · Planificador
+  </a>
+  {% with module=request.session.current_module %}
+  {% if module %}
+  <a href="/"
+     style="background:rgba(255,255,255,.18);color:#fff;text-decoration:none;
+            border-radius:6px;padding:.2rem .7rem;font-size:.8rem;font-weight:600;
+            border:1px solid rgba(255,255,255,.3);">
+    {% if module == 'OBRA' %}🏗️ Obra{% else %}🎪 Evento{% endif %}
+    <span style="opacity:.7;font-size:.7rem;margin-left:.3rem;">cambiar</span>
+  </a>
+  {% endif %}
+  {% endwith %}
+</div>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  /* ── Verde Loorent ──────────────────────────────────────── */
+  :root {
+    --primary:         #0F6B43;
+    --primary-dark:    #0a4f31;
+    --primary-light:   #e8f5ef;
+    --header-bg:       #0F6B43;
+    --header-color:    #ffffff;
+    --header-link-color: #ffffff;
+    --breadcrumbs-bg:  #F0FBF5;
+    --breadcrumbs-link-fg: #0F6B43;
+    --link-fg:         #0F6B43;
+    --link-hover-color:#0a4f31;
+    --button-bg:       #0F6B43;
+    --default-button-bg: #0F6B43;
+    --close-button-bg: #0F6B43;
+  }
+
+  /* Header */
+  #header {
+    background: #0F6B43 !important;
+    color: #fff !important;
+  }
+  #header a:link, #header a:visited { color: #fff !important; }
+
+  /* Breadcrumbs */
+  div.breadcrumbs {
+    background: #F0FBF5;
+    color: #0F6B43;
+  }
+  div.breadcrumbs a { color: #0F6B43; }
+
+  /* Sidebar nav headers */
+  #nav-sidebar .module caption, .module > h2, .module > table > caption {
+    background: #0F6B43 !important;
+    color: #fff !important;
+  }
+
+  /* Buttons */
+  .button, input[type=submit], input[type=button], .submit-row input, a.button {
+    background: #0F6B43;
+    border-color: #0a4f31;
+  }
+  .button:hover, input[type=submit]:hover {
+    background: #0a4f31;
+  }
+  .button.default, input[type=submit].default, .submit-row input.default {
+    background: #0F6B43;
+    border-color: #0a4f31;
+  }
+
+  /* Links */
+  a:link, a:visited { color: #0F6B43; }
+  a:hover { color: #0a4f31; }
+
+  /* Object tools (add button, etc.) */
+  .object-tools a:link, .object-tools a:visited {
+    background-color: #0F6B43;
+  }
+  .object-tools a:hover { background-color: #0a4f31; }
+
+  /* Calendar / clock widget */
+  .calendarbox h2, .clockbox h2 {
+    background: #0F6B43;
+    color: #fff;
+  }
+
+  /* Change list selected row */
+  tr.selected { background: #e8f5ef; }
+
+  /* Filter sidebar active */
+  #changelist-filter li.selected a { color: #0F6B43; }
+
+  /* Language switcher in header */
+  .lang-bar {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    margin-left: 1rem;
+  }
+  .lang-bar form { display: inline; }
+  .lang-bar button {
+    background: rgba(255,255,255,.15);
+    border: 1px solid rgba(255,255,255,.35);
+    border-radius: 5px;
+    color: #fff;
+    font-size: .78rem;
+    padding: .2rem .55rem;
+    cursor: pointer;
+  }
+  .lang-bar button:hover { background: rgba(255,255,255,.28); }
+</style>
+{% endblock %}
+
+{% block usertools %}
+<div style="display:flex;align-items:center;gap:1rem;">
+  <div class="lang-bar">
+    <form action="/i18n/set_language/" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="language" value="es">
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <button type="submit">ES</button>
+    </form>
+    <form action="/i18n/set_language/" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="language" value="ca">
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <button type="submit">CA</button>
+    </form>
+  </div>
+  {{ block.super }}
+</div>
+{% endblock %}

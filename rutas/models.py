@@ -474,6 +474,10 @@ class Contract(models.Model):
         asociada (max_vehicle_size). Para ENTREGA y RECOGIDA se exige LARGE.
     """
 
+    class Module(models.TextChoices):
+        OBRA   = 'OBRA',   'Obra'
+        EVENTO = 'EVENTO', 'Evento'
+
     class Status(models.TextChoices):
         ACTIVE      = 'ACTIVE',       'Activo'
         INTERRUPTED = 'INTERRUPTED',  'Interrumpido'
@@ -488,6 +492,13 @@ class Contract(models.Model):
         SATURDAY = 5, 'Sábado'
         SUNDAY = 6, 'Domingo'
 
+    module = models.CharField(
+        max_length=10,
+        choices=Module.choices,
+        default=Module.OBRA,
+        verbose_name='Módulo',
+        help_text='Obra o Evento. Determina en qué sección aparece este pedido.',
+    )
     budget_number = models.CharField(
         max_length=50, blank=True, default='',
         verbose_name='Nº presupuesto',
@@ -627,8 +638,8 @@ class ServiceTask(models.Model):
     )
 
     class Meta:
-        verbose_name        = 'Tarea de servicio'
-        verbose_name_plural = 'Tareas de servicio'
+        verbose_name        = 'Mantenimiento'
+        verbose_name_plural = 'Mantenimientos'
         ordering            = ['scheduled_date', 'task_type']
 
     def __str__(self) -> str:

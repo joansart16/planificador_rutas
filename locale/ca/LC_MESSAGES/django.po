@@ -1,0 +1,129 @@
+# Catalan translations for Loorent Planificador de Rutas
+# Joan Sart, 2026
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: ca\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+# Models
+msgid "Conductor"
+msgstr "Conductor"
+
+msgid "Conductores"
+msgstr "Conductors"
+
+msgid "Vehículo"
+msgstr "Vehicle"
+
+msgid "Vehículos"
+msgstr "Vehicles"
+
+msgid "Empresa"
+msgstr "Empresa"
+
+msgid "Empresas"
+msgstr "Empreses"
+
+msgid "Ubicación"
+msgstr "Ubicació"
+
+msgid "Ubicaciones"
+msgstr "Ubicacions"
+
+msgid "Pedido"
+msgstr "Comanda"
+
+msgid "Pedidos"
+msgstr "Comandes"
+
+msgid "Mantenimiento"
+msgstr "Manteniment"
+
+msgid "Mantenimientos"
+msgstr "Manteniments"
+
+msgid "Módulo"
+msgstr "Mòdul"
+
+msgid "Obra"
+msgstr "Obra"
+
+msgid "Evento"
+msgstr "Esdeveniment"
+
+msgid "Activo"
+msgstr "Actiu"
+
+msgid "Interrumpido"
+msgstr "Interromput"
+
+msgid "Retirado"
+msgstr "Retirat"
+
+msgid "Nombre"
+msgstr "Nom"
+
+msgid "Fecha de inicio"
+msgstr "Data d'inici"
+
+msgid "Fecha de fin (recogida)"
+msgstr "Data de fi (recollida)"
+
+msgid "Estado"
+msgstr "Estat"
+
+msgid "Zona de Mallorca"
+msgstr "Zona de Mallorca"
+
+msgid "Código postal"
+msgstr "Codi postal"
+
+msgid "Dirección (calle y número)"
+msgstr "Adreça (carrer i número)"
+
+msgid "Población"
+msgstr "Població"
+
+msgid "Municipio"
+msgstr "Municipi"
+
+msgid "Número de cabinas"
+msgstr "Nombre de cabines"
+
+msgid "Nº presupuesto"
+msgstr "Nº pressupost"
+
+msgid "Panel de control"
+msgstr "Tauler de control"
+
+msgid "Lunes"
+msgstr "Dilluns"
+
+msgid "Martes"
+msgstr "Dimarts"
+
+msgid "Miércoles"
+msgstr "Dimecres"
+
+msgid "Jueves"
+msgstr "Dijous"
+
+msgid "Viernes"
+msgstr "Divendres"
+
+msgid "Sábado"
+msgstr "Dissabte"
+
+msgid "Domingo"
+msgstr "Diumenge"
+
+msgid "Entrega"
+msgstr "Lliurament"
+
+msgid "Limpieza"
+msgstr "Neteja"
+
+msgid "Recogida"
+msgstr "Recollida"

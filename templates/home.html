@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loorent · Planificador de Rutas</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+      background: #F9FAFB;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: #0F6B43;
+      color: #fff;
+      padding: 0 2rem;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header .brand {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+    }
+    header .user-info {
+      font-size: .85rem;
+      opacity: .85;
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+    }
+    header .user-info a {
+      color: #fff;
+      text-decoration: none;
+      opacity: .75;
+    }
+    header .user-info a:hover { opacity: 1; }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 1rem;
+    }
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: .5rem;
+    }
+    .subtitle {
+      color: #6B7280;
+      font-size: .95rem;
+      margin-bottom: 2.5rem;
+    }
+    .modules {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .module-card {
+      background: #fff;
+      border: 2px solid #E5E7EB;
+      border-radius: 12px;
+      padding: 2rem 2.5rem;
+      width: 220px;
+      text-align: center;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color .15s, box-shadow .15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .75rem;
+    }
+    .module-card:hover {
+      border-color: #0F6B43;
+      box-shadow: 0 4px 16px rgba(15,107,67,.12);
+    }
+    .module-card.active {
+      border-color: #0F6B43;
+      background: #F0FBF5;
+    }
+    .module-card .icon {
+      font-size: 2.5rem;
+      line-height: 1;
+    }
+    .module-card .label {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #111827;
+    }
+    .module-card .desc {
+      font-size: .82rem;
+      color: #6B7280;
+    }
+    .module-card .badge {
+      display: inline-block;
+      padding: .2rem .7rem;
+      border-radius: 999px;
+      font-size: .75rem;
+      font-weight: 600;
+      background: #0F6B43;
+      color: #fff;
+      margin-top: .25rem;
+    }
+    .lang-switcher {
+      margin-top: 3rem;
+      display: flex;
+      gap: 1rem;
+      font-size: .85rem;
+    }
+    .lang-switcher form { display: inline; }
+    .lang-switcher button {
+      background: none;
+      border: 1px solid #D1D5DB;
+      border-radius: 6px;
+      padding: .3rem .8rem;
+      cursor: pointer;
+      color: #374151;
+      font-size: .85rem;
+    }
+    .lang-switcher button:hover { border-color: #0F6B43; color: #0F6B43; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="brand">Loorent · Planificador de Rutas</span>
+    <div class="user-info">
+      <span>{{ request.user.get_full_name|default:request.user.username }}</span>
+      <a href="/admin/">Admin</a>
+      <a href="/admin/logout/">Salir</a>
+    </div>
+  </header>
+
+  <main>
+    <h1>Selecciona el módulo</h1>
+    <p class="subtitle">Elige en qué área quieres trabajar hoy</p>
+
+    <div class="modules">
+      {% for mod in modules %}
+        <a href="{% url 'set_module' mod.value %}"
+           class="module-card {% if current_module == mod.value %}active{% endif %}">
+          {% if mod.value == 'OBRA' %}
+            <span class="icon">🏗️</span>
+            <span class="label">Obra</span>
+            <span class="desc">Pedidos y mantenimientos de obras de construcción</span>
+          {% else %}
+            <span class="icon">🎪</span>
+            <span class="label">Evento</span>
+            <span class="desc">Pedidos y mantenimientos de eventos y festivales</span>
+          {% endif %}
+          {% if current_module == mod.value %}
+            <span class="badge">Activo</span>
+          {% endif %}
+        </a>
+      {% endfor %}
+    </div>
+
+    <div class="lang-switcher">
+      <form action="/i18n/set_language/" method="post">
+        {% csrf_token %}
+        <input type="hidden" name="language" value="es">
+        <input type="hidden" name="next" value="/">
+        <button type="submit">Español</button>
+      </form>
+      <form action="/i18n/set_language/" method="post">
+        {% csrf_token %}
+        <input type="hidden" name="language" value="ca">
+        <input type="hidden" name="next" value="/">
+        <button type="submit">Català</button>
+      </form>
+    </div>
+  </main>
+</body>
+</html>
