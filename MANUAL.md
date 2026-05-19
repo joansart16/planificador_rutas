@@ -1,185 +1,154 @@
-# Manual de Usuario y Desarrollador — Planificador de Rutas (Loorent)
+# Manual Tècnic — Planificador de Rutes Loorent
 
-## Índice
-
-1. [¿Qué es este proyecto?](#1-qué-es-este-proyecto)
-2. [Instalación y puesta en marcha](#2-instalación-y-puesta-en-marcha)
-3. [Arquitectura del proyecto](#3-arquitectura-del-proyecto)
-4. [Modelos de datos](#4-modelos-de-datos)
-5. [Panel de administración](#5-panel-de-administración)
-6. [Flujo de trabajo operativo](#6-flujo-de-trabajo-operativo)
-7. [Importación y exportación Excel](#7-importación-y-exportación-excel)
-8. [Reglas de validación (Reglas de Oro)](#8-reglas-de-validación-reglas-de-oro)
-9. [Geocodificación Google Maps](#9-geocodificación-google-maps)
-10. [Referencia técnica](#10-referencia-técnica)
+> Guia de referència per entendre, mantenir i evolucionar el projecte.  
+> Actualitzat a la versió 0.1.x
 
 ---
 
-## 1. ¿Qué es este proyecto?
+## Taula de continguts
 
-**Planificador de Rutas** es una aplicación Django para gestionar la logística de alquiler y limpieza de cabinas (baños portátiles, módulos de obra, etc.) en **Mallorca**.
-
-Permite:
-- Registrar clientes (empresas), ubicaciones de obra y vehículos.
-- Crear contratos de servicio con fechas de entrega y recogida.
-- Generar automáticamente las tareas de **ENTREGA** y **RECOGIDA**.
-- Generar manualmente las tareas de **LIMPIEZA** por día de la semana.
-- Asignar conductores y vehículos a cada tarea validando disponibilidad y tamaño.
-- Exportar el parte de trabajo diario a Excel.
-
----
-
-## 2. Instalación y puesta en marcha
-
-### Requisitos previos
-
-- Python 3.11+
-- PostgreSQL 14+
-- Cuenta Google Cloud con Maps JavaScript API + Geocoding API habilitadas
-
-### Pasos
-
-```bash
-# 1. Clonar el repositorio
-git clone <url-repo> planificador_rutas
-cd planificador_rutas
-
-# 2. Crear entorno virtual e instalar dependencias
-python -m venv venv
-# Windows:
-venv\Scripts\activate
-# Linux/Mac:
-source venv/bin/activate
-
-pip install -r requirements.txt
-
-# 3. Crear base de datos PostgreSQL
-createdb loorent_planificador
-
-# 4. Configurar variables de entorno — copiar y editar .env
-```
-
-Contenido del archivo `.env` (en la raíz del proyecto):
-
-```ini
-DJANGO_SECRET_KEY=una-clave-secreta-muy-larga-y-aleatoria
-DJANGO_DEBUG=True
-
-DB_NAME=loorent_planificador
-DB_USER=postgres
-DB_PASSWORD=tu_password
-DB_HOST=localhost
-DB_PORT=5432
-
-GOOGLE_MAPS_API_KEY=AIza...tu-clave-de-google-maps
-```
-
-```bash
-# 5. Aplicar migraciones
-python manage.py migrate
-
-# 6. Crear superusuario
-python manage.py createsuperuser
-
-# 7. Arrancar el servidor
-python manage.py runserver
-```
-
-Acceder a: **http://127.0.0.1:8000/admin/**
+1. [Visió general](#1-visió-general)
+2. [Estructura de carpetes](#2-estructura-de-carpetes)
+3. [Models de dades](#3-models-de-dades)
+4. [Mòduls del Admin](#4-mòduls-del-admin)
+5. [On modificar cada cosa](#5-on-modificar-cada-cosa)
+6. [Infraestructura i entorns](#6-infraestructura-i-entorns)
+7. [Operacions habituals al servidor](#7-operacions-habituals-al-servidor)
+8. [Regles de negoci fixades](#8-regles-de-negoci-fixades)
+9. [Referència tècnica](#9-referència-tècnica)
 
 ---
 
-## 3. Arquitectura del proyecto
+## 1. Visió general
 
-```
-planificador_rutas/          ← Configuración Django (settings, urls, wsgi)
-rutas/                       ← Aplicación principal
-  models.py                  ← 7 modelos de datos
-  admin.py                   ← Panel de administración completo
-  signals.py                 ← Generación automática de tareas al crear contratos
-  migrations/                ← 16 migraciones de base de datos
-  static/rutas/admin/        ← JavaScript: geocodificación y atajos de fecha
-  templates/admin/rutas/     ← Plantillas HTML del panel admin
-```
+**Planificador de Rutes** és un ERP intern per a Loorent (sanitaris portàtils a Mallorca).  
+Gestiona entregues, recollides i manteniments (neteges) des d'un panell d'administració Django.
 
-### Stack tecnológico
+**Stack tècnic:**
 
-| Componente | Tecnología |
-|-----------|-----------|
-| Backend | Django 6 |
-| Base de datos | PostgreSQL |
-| Panel admin | Django Admin (personalizado) |
-| Excel | openpyxl |
-| Geocodificación | Google Maps Places Autocomplete |
-| Configuración | python-dotenv |
+| Capa | Tecnologia |
+|------|-----------|
+| Backend | Python 3.12 + Django 6 |
+| Base de dades | PostgreSQL 15 |
+| Servidor web | Gunicorn + Nginx |
+| Infraestructura | Docker + Docker Compose a AWS EC2 |
+| CI/CD | GitHub Actions (auto-deploy) |
 
 ---
 
-## 4. Modelos de datos
-
-### Diagrama de relaciones
+## 2. Estructura de carpetes
 
 ```
-Company ──< Location ──< Contract ──< ServiceTask
-                 │                         │
-                 └── default_driver        ├── driver (FK → Driver)
-                                           └── vehicle (FK → Vehicle)
+planificador_rutas/            ← Configuració Django (settings, urls, wsgi)
+  settings.py                  ← Variables d'entorn, middleware, BD, i18n
+  urls.py                      ← Rutes URL principals
+  wsgi.py                      ← Punt d'entrada del servidor
+
+rutas/                         ← Aplicació principal (TOTA la lògica aquí)
+  models.py                    ← Models de dades i regles de negoci
+  admin.py                     ← Interfície d'administració (UI principal)
+  views.py                     ← Home i selecció de mòdul (OBRA/EVENTO)
+  signals.py                   ← Generació automàtica de tasques al guardar contractes
+  apps.py                      ← Configuració de l'app Django
+
+  migrations/                  ← Historial de canvis a la BD (no tocar manualment)
+    0001_initial.py ... 0023_*
+
+  templates/admin/rutas/       ← Plantilles HTML de cada mòdul
+    company/                   ← Llistat d'empreses
+    contract/                  ← Formulari i llistat de pedidos
+    driver/                    ← Llistat de conductors
+    location/                  ← Formulari i llistat d'ubicacions
+    route/                     ← Rutes, mapes, regeneració
+    servicetask/               ← Llistat de tasques, exportació, reassignació
+    vehicle/                   ← Llistat de vehicles
+    shared/
+      upload_excel.html        ← Plantilla reutilitzable per importació Excel
+
+  static/rutas/admin/          ← CSS i JavaScript propi
+    admin_loorent_styles.css   ← Tema verd Loorent (#0F6B43)
+    admin_filter_dropdown.js   ← Filtres desplegables estil Excel (Tom Select)
+    location_geocode.js        ← Integració Google Maps als formularis d'ubicació
+    contract_dates_tomorrow.js ← Botó "Demà" als selectors de data
+
+  templatetags/
+    loorent_tags.py            ← Tag {% app_version %} que llegeix el fitxer VERSION
+
+  management/commands/
+    seed_demo.py               ← Carrega dades de demostració
+    crear_usuarios.py          ← Creació massiva d'usuaris
+
+templates/admin/               ← Plantilles globals Django admin
+  base_site.html               ← Header verd + badge de versió + selector d'idioma
+
+locale/                        ← Traduccions (es / ca)
+scripts/
+  db_sync.sh                   ← Sincronització producció → staging (cron dissabtes)
+
+.github/workflows/
+  deploy-staging.yml           ← Auto-deploy staging + bump de versió en cada push
+  deploy-production.yml        ← Deploy manual a producció (botó GitHub Actions)
+
+docker-compose.server.yml      ← Tots els serveis Docker (staging + producció)
+nginx.server.conf              ← Proxy invers Nginx multi-domini
+Dockerfile                     ← Imatge Docker de l'aplicació
+docker-entrypoint.sh           ← migrate + collectstatic + gunicorn
+
+VERSION                        ← Versió actual (s'actualitza automàticament)
+CHANGELOG.md                   ← Historial de versions
+requirements.txt               ← Dependències Python
+```
+
+---
+
+## 3. Models de dades
+
+Tots els models estan a **`rutas/models.py`**.
+
+### Diagrama de relacions
+
+```
+Company ──< Location ──< Contract ──< ServiceTask >── Driver
+                │                                 └── Vehicle
+                └── default_driver (FK → Driver)
 
 Driver ──< DriverUnavailability
+
+Route ──< RouteStop >── ServiceTask
 ```
 
-### Driver (Conductor)
+---
 
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| `name` | CharField | Nombre completo |
-| `working_days` | JSONField | Array de días laborales (0=Lunes … 6=Domingo) |
+### Company (Empresa)
+Agrupa les ubicacions d'un client.
 
-**Métodos clave:**
-- `is_working_day(day)` → `bool` — ¿trabaja ese día de semana?
-- `is_available_on(date)` → `bool` — día laboral Y sin indisponibilidad activa
-- `get_active_unavailability(date)` → `DriverUnavailability | None`
+| Camp | Descripció |
+|------|-----------|
+| `name` | Nom de l'empresa (únic) |
+| `email` | Correu electrònic |
 
-### DriverUnavailability (Indisponibilidad)
+---
 
-Registra períodos en los que el conductor no está disponible.
+### Location (Ubicació / Obra)
 
-| Campo | Valores posibles |
-|-------|-----------------|
-| `reason` | VACATION, SICK_LEAVE, PERSONAL, OTHER |
-| `start_date` / `end_date` | Rango de fechas (inclusive) |
+| Camp | Descripció |
+|------|-----------|
+| `name` | Nom de l'obra o event |
+| `company` | FK → Company |
+| `default_driver` | FK → Driver (conductor habitual) |
+| `address` | Adreça completa |
+| `town` | Població |
+| `postal_code` | Codi postal |
+| `zone` | Comarca (calculada automàticament des del CP) |
+| `latitude / longitude` | Coordenades GPS |
+| `max_vehicle_size` | Gàlib màxim (1=Pickup, 2=Petit, 3=Gran) |
+| `cabin_count` | Nombre de cabines instal·lades |
+| `comment` | Comentari lliure |
 
-### Vehicle (Vehículo)
+**Zones de Mallorca:**
 
-| Campo | Valores |
-|-------|---------|
-| `size` | 1=Pickup, 2=Camión pequeño, 3=Camión grande |
-| `status` | AVAILABLE, MAINTENANCE, RETIRED |
-
-> Solo los vehículos con `status=AVAILABLE` pueden asignarse a tareas.
-
-### Company (Empresa / Cliente)
-
-Agrupa ubicaciones bajo un mismo titular. Solo tiene `name` (único) y `email`.
-
-### Location (Ubicación)
-
-El modelo más rico. Representa una obra, evento o punto de servicio.
-
-**Campos principales:**
-
-| Grupo | Campos |
-|-------|--------|
-| Identificación | `name`, `company`, `default_driver` |
-| Contacto | `contact_name`, `contact_phone`, `comment`, `cabin_count` |
-| Dirección | `address`, `town`, `municipality`, `postal_code`, `zone` |
-| Coordenadas | `latitude`, `longitude` |
-| Restricción | `max_vehicle_size` |
-
-**Zonas de Mallorca:**
-
-| Código | Nombre |
-|--------|--------|
+| Codi | Zona |
+|------|------|
 | PALMA | Palma |
 | TRAMUNTANA | Serra de Tramuntana |
 | RAIGUER | Raiguer (Inca / Binissalem) |
@@ -187,257 +156,401 @@ El modelo más rico. Representa una obra, evento o punto de servicio.
 | MIGJORN | Migjorn (Llucmajor / Campos) |
 | LLEVANT | Llevant (Manacor / Artà) |
 
-La zona se **detecta automáticamente** al guardar, con esta prioridad:
-1. Código postal → tabla `_POSTAL_ZONE_MAP`
-2. Municipio administrativo → tabla `_TOWN_ZONE_MAP`
-3. Población → tabla `_TOWN_ZONE_MAP`
-
-### Contract (Contrato)
-
-| Campo | Descripción |
-|-------|-------------|
-| `location` | Ubicación del contrato |
-| `start_date` | Fecha de entrega |
-| `end_date` | Fecha de recogida (opcional) |
-| `cleaning_frequency` | Limpiezas por semana (1–7) |
-| `cleaning_weekdays` | Array JSON de días (0–6) |
-| `access_start_time` / `access_end_time` | Ventana horaria (informativo) |
-| `status` | ACTIVE, CLOSED |
-
-> Al crear un contrato se generan automáticamente 1 tarea ENTREGA y (si hay fecha de fin) 1 tarea RECOGIDA. Las tareas de LIMPIEZA se generan manualmente.
-
-### ServiceTask (Tarea de Servicio)
-
-| Campo | Descripción |
-|-------|-------------|
-| `task_type` | ENTREGA, LIMPIEZA, RECOGIDA |
-| `scheduled_date` | Fecha programada |
-| `driver` | Conductor asignado (nullable) |
-| `vehicle` | Vehículo asignado (nullable) |
-| `location` | Ubicación |
-| `contract` | Contrato al que pertenece |
-| `suggested_vehicle_size` | Tamaño recomendado (calculado) |
+La zona es **detecta automàticament** al guardar, mirant el codi postal al diccionari `_POSTAL_ZONE_MAP` de `models.py`.
 
 ---
 
-## 5. Panel de administración
+### Driver (Conductor)
 
-Accede en `/admin/`. Los modelos aparecen en este orden en el menú:
+| Camp | Descripció |
+|------|-----------|
+| `name` | Nom complet |
+| `working_days` | JSON array de dies laborables [0=Dll … 6=Dg] |
+| `default_vehicle` | FK → Vehicle (habitual) |
 
-1. Vehículos
-2. Conductores
-3. Empresas
-4. Ubicaciones
-5. Contratos
-6. Tareas de servicio
-
-### Funcionalidades especiales por modelo
-
-#### Conductores
-- Filtro **"Disponibilidad mañana"** en la barra lateral.
-- Vista de indisponibilidades en línea (inline).
-- Badge de disponibilidad por conductor en la lista.
-
-#### Ubicaciones
-- **Buscador de dirección Google Maps** en el formulario de edición: escribe una dirección y se rellenan automáticamente latitud, longitud, población, municipio, código postal y zona.
-- Columnas comprimidas con tooltip para pantallas pequeñas.
-
-#### Contratos
-- **Botón "Mañana"** en los selectores de fecha (en lugar de "Hoy").
-- **Vista "Generar limpiezas por día"** — genera en masa las tareas LIMPIEZA para un día concreto.
-- Aviso al eliminar: muestra cuántas tareas se eliminarán en cascada.
-- Badge de coherencia: alerta si `cleaning_frequency` ≠ número de `cleaning_weekdays`.
-- Inline con las tareas del contrato (readonly para tipo/fecha, editable para conductor/vehículo).
-
-#### Tareas de servicio
-- **Vista "Exportar tareas por día"** — descarga Excel con el parte de trabajo.
-- **Acción "Reasignar conductor"** — permite asignar un conductor a múltiples tareas seleccionadas.
-- Filtros avanzados: por tipo, fecha exacta, conductor, estado del vehículo, zona, empresa, estado del contrato, y asignación pendiente.
+**Mètodes clau:**
+- `is_available_on(date)` → comprova dia laborable + sense indisponibilitat activa
 
 ---
 
-## 6. Flujo de trabajo operativo
+### DriverUnavailability (Indisponibilitat)
 
-### Alta de un nuevo cliente y obra
+Períodes en els quals el conductor no pot treballar.
+
+| Camp | Valors |
+|------|--------|
+| `reason` | VACATION, SICK_LEAVE, PERSONAL, OTHER |
+| `start_date / end_date` | Rang de dates (inclosos) |
+
+---
+
+### Vehicle
+
+| Camp | Valors |
+|------|--------|
+| `size` | PICKUP (1), SMALL (2), LARGE (3) |
+| `status` | AVAILABLE, MAINTENANCE, RETIRED |
+
+---
+
+### Contract (Pedido)
+
+| Camp | Descripció |
+|------|-----------|
+| `location` | FK → Location |
+| `start_date` | Data d'entrega |
+| `end_date` | Data de recollida (opcional) |
+| `cleaning_frequency` | Neteges per setmana (1–7) |
+| `cleaning_weekdays` | JSON array de dies de neteja [0–6] |
+| `status` | ACTIVE, INTERRUPTED, RETIRED |
+
+> **Important:** En guardar un contract es generen automàticament (via `signals.py`):
+> - 1 tasca **DELIVERY** a `start_date`
+> - 1 tasca **PICKUP** a `end_date` (si existeix)
+
+---
+
+### ServiceTask (Tasca de Servei)
+
+| Camp | Descripció |
+|------|-----------|
+| `task_type` | DELIVERY, CLEANING, PICKUP |
+| `scheduled_date` | Data programada |
+| `driver` | FK → Driver (nullable) |
+| `location` | FK → Location |
+| `contract` | FK → Contract |
+| `is_cancelled` | Boolean |
+| `suggested_vehicle_size` | Talla recomanada (calculada) |
+
+---
+
+### Route (Ruta)
+
+| Camp | Descripció |
+|------|-----------|
+| `driver` | FK → Driver |
+| `vehicle` | FK → Vehicle |
+| `date` | Data de la ruta |
+| `module` | OBRA o EVENTO |
+
+---
+
+### RouteStop (Parada de Ruta)
+
+Ordena les tasques dins d'una ruta.
+
+| Camp | Descripció |
+|------|-----------|
+| `route` | FK → Route |
+| `task` | FK → ServiceTask |
+| `order` | Número d'ordre (enter) |
+
+---
+
+## 4. Mòduls del Admin
+
+El panell `/admin/` és la interfície principal. Cada secció:
+
+### Empreses
+Gestió de clients. Importació/exportació Excel.
+
+### Ubicacions
+Llista d'obres. Geocodificació automàtica amb Google Maps.  
+Columnes: Empresa · Nom · Poble · Zona · Gàlib · Cabines.
+
+### Conductors
+Gestió de conductors i dies laborables. Badge de disponibilitat.
+
+### Vehicles
+Gestió de flota: mida i estat (Disponible / Manteniment / Retirat).
+
+### Pedidos (Contractes)
+Acords de servei.
+- Botó **"Generar tasques de neteja"** per dia concret
+- Badge d'alerta si `cleaning_frequency` ≠ dies seleccionats
+- Llistat de tasques inline (visible, no editable des d'aquí)
+
+### Tasques de Servei
+Vista principal de despatx. Filtres acumulatius estil Excel per:
+- Tipus · Data · Conductor · Empresa · Ubicació · Poble · Estat · Pendent d'assignació
+
+### Rutes
+- **Mapa** de la ruta amb reordenació drag & drop
+- **Mapa del dia**: totes les rutes d'un dia en un sol mapa Google
+- **Regenerar ruta**: reassigna tasques automàticament per conductor
+- **Exportar**: Excel amb coordenades, cabines i comentaris
+
+---
+
+## 5. On modificar cada cosa
+
+### Afegir un camp nou a un model
+1. Editar `rutas/models.py` → classe corresponent
+2. `python manage.py makemigrations`
+3. Revisar el fitxer creat a `rutas/migrations/`
+4. Push → s'aplica automàticament a staging i producció
+
+### Canviar columnes visibles al llistat d'un mòdul
+```
+rutas/admin.py → classe [Model]Admin → list_display = (...)
+```
+
+### Canviar els filtres de la barra lateral
+```
+rutas/admin.py → classe [Model]Admin → list_filter = (...)
+```
+
+### Canviar un formulari d'edició
+```
+rutas/admin.py → classe [Model]Admin → fieldsets = (...)
+# Per camps especials:
+rutas/templates/admin/rutas/[model]/change_form.html
+```
+
+### Afegir una nova validació de negoci
+```
+rutas/models.py → mètode clean() del model corresponent
+# Les validacions de gàlib i disponibilitat estan a ServiceTask.clean()
+```
+
+### Canviar colors o estils visuals
+```
+rutas/static/rutas/admin/admin_loorent_styles.css
+# Color principal: #0F6B43 (verd Loorent)
+```
+
+### Canviar el comportament dels filtres desplegables Excel
+```
+rutas/static/rutas/admin/admin_filter_dropdown.js
+```
+
+### Canviar el header / branding del admin
+```
+templates/admin/base_site.html
+```
+
+### Canviar la lògica de generació automàtica de tasques
+```
+rutas/signals.py → funció generate_service_tasks
+```
+
+### Afegir un poble o codi postal que no detecta la zona
+```
+rutas/models.py → diccionari _POSTAL_ZONE_MAP (codis postals)
+rutas/models.py → diccionari _TOWN_ZONE_MAP (municipis)
+rutas/static/rutas/admin/location_geocode.js → objectes POSTAL_ZONE / TOWN_ZONE
+```
+
+### Canviar traduccions (ES / CA)
+1. Editar `locale/es/LC_MESSAGES/django.po` i/o `locale/ca/`
+2. `python compile_mo.py`
+3. Push
+
+---
+
+## 6. Infraestructura i entorns
+
+### Entorns
+
+| Entorn | URL | S'actualitza |
+|--------|-----|--------------|
+| **Local** | http://127.0.0.1:8000 | En executar `runserver` |
+| **Staging** | https://planificador.desenvolupament.sarts.dev | Automàtic en cada push a master |
+| **Producció** | https://planificador.sarts.dev | Manual via botó GitHub Actions |
+
+### Servidor AWS
+- EC2 · Ubuntu · IP: `15.217.218.32`
+- Connexió SSH: `ssh ubuntu@15.217.218.32`
+- Staging: `/srv/planificador_rutas/`
+- Producció: `/srv/planificador_rutas_prod/`
+
+### Serveis Docker (gestionats per `docker-compose.server.yml`)
+
+| Contenidor | Funció |
+|-----------|--------|
+| `db_staging` | PostgreSQL per staging |
+| `db_production` | PostgreSQL per producció |
+| `staging_web` | Django + Gunicorn (staging, porta 8000 interna) |
+| `production_web` | Django + Gunicorn (producció, porta 8000 interna) |
+| `nginx_proxy` | Nginx · ports 80/443 · proxy invers SSL |
+| `certbot` | Renovació certificats SSL automàtica (cada 12h) |
+| `db_sync` | Cron dissabtes 02:00 (clona prod → staging) |
+
+### Fitxers de configuració al servidor *(NO estan al git)*
+
+| Fitxer | Contingut |
+|--------|-----------|
+| `/srv/planificador_rutas/.env.server` | Credencials de BD (staging + producció) |
+| `/srv/planificador_rutas/.env.staging` | Config Django staging |
+| `/srv/planificador_rutas_prod/.env.production` | Config Django producció |
+
+### Variables d'entorn importants
+
+| Variable | Descripció |
+|----------|-----------|
+| `DJANGO_SECRET_KEY` | Clau secreta (mínim 50 caràcters) |
+| `DJANGO_DEBUG` | `False` en staging i producció |
+| `DJANGO_ALLOWED_HOSTS` | Domini del servidor |
+| `DB_NAME / DB_USER / DB_PASSWORD` | Credencials de BD |
+| `DB_HOST` | `db_staging` o `db_production` (nom del contenidor) |
+| `GOOGLE_MAPS_API_KEY` | API Key de Google Maps |
+
+### Flux de versions
 
 ```
-1. Crear Empresa (nombre + email)
-2. Crear Conductor si no existe (nombre + días de trabajo)
-3. Crear Vehículo si no existe (matrícula + tipo + estado)
-4. Crear Ubicación:
-   - Seleccionar empresa
-   - Usar el buscador de Google Maps para rellenar la dirección
-   - Elegir tamaño máximo de vehículo (gálibo)
-   - Seleccionar conductor por defecto
-5. Crear Contrato en la ubicación:
-   - Fecha de inicio (entrega)
-   - Fecha de fin (recogida, si se conoce)
-   - Frecuencia de limpieza y días de la semana
-   → El sistema genera automáticamente la tarea ENTREGA (y RECOGIDA si hay fecha de fin)
-```
+push a master
+    │
+    ▼
+GitHub Actions (deploy-staging.yml)
+    ├── Llegeix VERSION (ex: 0.1.5)
+    ├── Suma +1 al patch → 0.1.6
+    ├── Fa commit "v0.1.6 [skip ci]" + tag git v0.1.6
+    ├── Push a master
+    └── SSH al servidor → rebuild staging_web
 
-### Preparar el parte del día
-
-```
-1. Ir a Contratos → "Generar limpiezas por día"
-   - Seleccionar la fecha (o usar botón rápido)
-   - El sistema crea las tareas LIMPIEZA para todos los contratos activos ese día
-2. Ir a Tareas de servicio
-   - Filtrar por fecha
-   - Asignar conductor y vehículo a cada tarea
-   - Para reasignaciones masivas: seleccionar tareas → Acción "Reasignar conductor"
-3. Exportar el parte: "Exportar tareas por día" → descarga Excel
-```
-
-### Gestionar indisponibilidades de conductores
-
-```
-1. Ir a Conductores → editar el conductor
-2. En la sección "Indisponibilidades", añadir el período:
-   - Motivo (vacaciones, baja médica, etc.)
-   - Fecha inicio y fin
-3. Al asignar ese conductor a una tarea en ese período, el sistema mostrará error
+Quan vols publicar a producció:
+    GitHub → Actions → "Deploy · Production" → Run workflow → escriu "0.1.6"
+    └── SSH al servidor → checkout v0.1.6 a /srv/planificador_rutas_prod → rebuild production_web
 ```
 
 ---
 
-## 7. Importación y exportación Excel
+## 7. Operacions habituals al servidor
 
-Cada modelo soporta carga masiva desde Excel. El flujo es:
+### Veure estat de tots els serveis
+```bash
+sudo docker compose --env-file .env.server -f docker-compose.server.yml ps
+```
 
-1. Descargar la **plantilla Excel de prueba** (incluye fila de ejemplo y hoja "Valores").
-2. Rellenar los datos siguiendo el formato.
-3. Cargar el archivo desde el botón **"Cargar Excel"**.
+### Veure logs d'un servei
+```bash
+sudo docker logs staging_web --tail 50
+sudo docker logs production_web --tail 50
+sudo docker logs nginx_proxy --tail 30
+```
 
-### Columnas por modelo
+### Reiniciar un servei
+```bash
+sudo docker compose --env-file .env.server -f docker-compose.server.yml restart staging_web
+```
 
-**Empresas:** `razon_social`, `correo_electronico`
+### Crear un superusuari
+```bash
+sudo docker exec -it production_web python manage.py createsuperuser
+sudo docker exec -it staging_web python manage.py createsuperuser
+```
 
-**Conductores:** `nombre`, `dias_trabajo` (ej: `0,1,2,3,4`)
+### Aplicar migracions manualment
+```bash
+sudo docker exec staging_web python manage.py migrate
+sudo docker exec production_web python manage.py migrate
+```
 
-**Vehículos:** `nombre_vehiculo`, `matricula`, `tipo`, `estado`
+### Sincronitzar BD producció → staging manualment
+```bash
+sudo docker exec db_sync sh /sync/db_sync.sh
+# Des del PC local (sense connectar-se al servidor):
+ssh ubuntu@15.217.218.32 "sudo docker exec db_sync sh /sync/db_sync.sh"
+```
 
-**Ubicaciones:** `nombre`, `empresa`, `contacto_nombre`, `contacto_telefono`, `direccion`, `comentario`, `poblacion`, `municipio`, `codigo_postal`, `zona`, `cabinas`, `tipo_max_vehiculo`, `conductor_por_defecto`, `latitud`, `longitud`
+### Veure log de l'última sincronització
+```bash
+sudo docker exec db_sync cat /var/log/db_sync.log
+```
 
-**Contratos:** `ubicacion`, `fecha_inicio`, `fecha_fin`, `limpiezas_semana`, `dias_limpieza`, `hora_acceso_inicio`, `hora_acceso_fin`, `estado`
+### Renovar certificat SSL manualment
+```bash
+sudo docker exec certbot certbot renew
+sudo docker exec nginx_proxy nginx -s reload
+```
 
-### Comportamiento de la importación
-- Registros existentes se **omiten** (no se duplican ni actualizan).
-- Se muestran avisos por fila con errores o registros omitidos.
-- Se muestran hasta 10 errores/avisos; el resto se cuenta.
+### Generar una secret key segura
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(50))"
+```
 
----
+### Posada en marxa en local
+```bash
+# 1. Activar entorn virtual
+venv\Scripts\activate          # Windows
+source venv/bin/activate       # Linux/Mac
 
-## 8. Reglas de validación (Reglas de Oro)
+# 2. Instal·lar dependències
+pip install -r requirements.txt
 
-Al asignar conductor y vehículo a una `ServiceTask`, el sistema valida:
+# 3. Crear fitxer .env a l'arrel (veure .env.server.example com a referència)
 
-| Regla | Descripción |
-|-------|-------------|
-| **1. Gálibo** | El vehículo no puede superar `location.max_vehicle_size` en tareas LIMPIEZA. |
-| **2. Capacidad de carga** | Tareas ENTREGA y RECOGIDA solo admiten vehículos de tamaño LARGE (Camión grande). |
-| **3a. Disponibilidad del conductor** | El conductor debe tener ese día como laboral y no tener indisponibilidad activa. |
-| **3b. Disponibilidad del vehículo** | El vehículo debe estar en estado `AVAILABLE`. |
-| **4. Rango temporal** | La fecha de la tarea debe caer dentro del período del contrato. |
-| **5. No superponer** | No se puede crear una LIMPIEZA el mismo día que una ENTREGA o RECOGIDA del mismo contrato. |
+# 4. Aplicar migracions
+python manage.py migrate
 
-Estas validaciones se ejecutan en `ServiceTask.clean()` y se muestran como errores en el formulario del admin.
+# 5. Crear superusuari
+python manage.py createsuperuser
 
----
-
-## 9. Geocodificación Google Maps
-
-El formulario de edición de **Ubicaciones** incluye un buscador de dirección integrado con Google Maps.
-
-### Cómo funciona
-
-1. Escribe una dirección en el campo de búsqueda (ej: `Avinguda Violetes, 18, Bunyola`).
-2. Al seleccionar un resultado del autocompletado, se rellenan automáticamente:
-   - `address` (calle y número)
-   - `latitude` y `longitude`
-   - `town` (población)
-   - `municipality` (municipio administrativo)
-   - `postal_code`
-   - `zone` (comarca detectada automáticamente)
-3. Se muestra un mini-mapa con la ubicación.
-4. Si editas manualmente `latitude` o `longitude`, los demás campos se actualizan via reverse geocoding.
-
-### Configuración necesaria
-
-La API Key de Google Maps debe tener habilitados:
-- **Maps JavaScript API**
-- **Places API**
-- **Geocoding API**
-
-Configúrala en `.env`:
-```ini
-GOOGLE_MAPS_API_KEY=AIza...
+# 6. Arrancar
+python manage.py runserver
 ```
 
 ---
 
-## 10. Referencia técnica
+## 8. Regles de negoci fixades
 
-### Señales Django (`signals.py`)
+Codificades a `ServiceTask.clean()` — **no canviar sense analitzar l'impacte**.
 
-`generate_service_tasks` se dispara con `post_save` al crear un `Contract`:
-- Crea 1 tarea `ENTREGA` en `start_date`.
-- Crea 1 tarea `RECOGIDA` en `end_date` (si existe).
-- Asigna `location.default_driver` a ambas.
-- Vehículo queda en blanco para asignación manual.
+| Regla | Descripció |
+|-------|-----------|
+| **Gàlib** | El vehicle no pot superar `location.max_vehicle_size` en tasques CLEANING |
+| **Entregues/Recollides** | Només vehicles `LARGE` per DELIVERY i PICKUP |
+| **Disponibilitat conductor** | El conductor ha de tenir aquell dia com a laborable i sense indisponibilitat activa |
+| **Disponibilitat vehicle** | El vehicle ha d'estar en estat `AVAILABLE` |
+| **Rang temporal** | La data de la tasca ha de caure dins el període del contracte |
+| **No superposició** | No es pot crear una CLEANING el mateix dia que una DELIVERY o PICKUP del mateix contracte |
 
-### Orden del menú admin
+---
 
-Controlado por el diccionario `ROUTES_MENU_ORDER` en `admin.py`. Para cambiar el orden modifica los valores numéricos:
+## 9. Referència tècnica
 
-```python
-ROUTES_MENU_ORDER = {
-    'Vehicle': 1,
-    'Driver': 2,
-    'Company': 3,
-    'Location': 4,
-    'Contract': 5,
-    'ServiceTask': 6,
-}
-```
+### Importació / Exportació Excel
 
-### Añadir un municipio o código postal
+Cada model suporta càrrega massiva. Flux:
+1. Descarregar la **plantilla Excel** (botó al llistat)
+2. Omplir les dades seguint el format (fila d'exemple inclosa)
+3. Carregar des del botó **"Cargar Excel"**
 
-Si aparece una zona no detectada, edita los diccionarios en `rutas/models.py`:
+Els registres existents s'**ometen** (no es dupliquen). Els errors es mostren per fila.
 
-- `Location._TOWN_ZONE_MAP` — para municipios (en minúsculas, sin tildes)
-- `Location._POSTAL_ZONE_MAP` — para códigos postales
+### Exportació del parte diari (Tasques de Servei)
 
-Y replica el cambio en `rutas/static/rutas/admin/location_geocode.js` en los objetos `TOWN_ZONE` y `POSTAL_ZONE`.
+Columnes del Excel exportat:
 
-### Exportación Excel diaria (parte de trabajo)
-
-Las columnas del Excel exportado son:
-
-| Columna | Contenido |
+| Columna | Contingut |
 |---------|-----------|
-| CLIENTE | Nombre de la empresa |
-| POBLACION | Población (en mayúsculas) |
-| ID EXTERNO | Nombre de la ubicación |
-| DIRECCION LINEA 2 | Dirección textual |
-| DIRECCION | Coordenadas `lat, lon` |
-| LIMPIEZA | `S` (semanal) o `N/Total` (ej: `2/3`) |
-| UNIDADES | Número de cabinas |
-| COMENTARIOS | Comentario de la ubicación (o `EO`/`RE` para entrega/recogida) |
-| HORA | (vacío, para rellenar manualmente) |
-| PERSONA DE REF. | Contacto en obra |
-| TELÉFONO | Teléfono de contacto |
-| EMAIL | Email de la empresa |
+| CLIENTE | Nom de l'empresa |
+| POBLACION | Població (majúscules) |
+| ID EXTERNO | Nom de la ubicació |
+| DIRECCION | Coordenades `lat, lon` |
+| LIMPIEZA | `S` (setmanal) o fracció (ex: `2/3`) |
+| UNIDADES | Nombre de cabines |
+| COMENTARIOS | Comentari o `EO`/`RE` per entrega/recollida |
+| PERSONA DE REF. | Contacte a l'obra |
+| TELÉFONO | Telèfon de contacte |
+| EMAIL | Email de l'empresa |
 
-### Variables de entorno
+### Geocodificació Google Maps
 
-| Variable | Descripción | Valor por defecto |
-|----------|-------------|-------------------|
-| `DJANGO_SECRET_KEY` | Clave secreta Django | `django-insecure-fallback-solo-dev` |
-| `DJANGO_DEBUG` | Modo debug | `True` |
-| `DB_NAME` | Nombre de la BD | `loorent_planificador` |
-| `DB_USER` | Usuario PostgreSQL | `postgres` |
-| `DB_PASSWORD` | Contraseña PostgreSQL | *(vacío)* |
-| `DB_HOST` | Host PostgreSQL | `localhost` |
-| `DB_PORT` | Puerto PostgreSQL | `5432` |
-| `GOOGLE_MAPS_API_KEY` | API Key de Google Maps | *(vacío)* |
+El formulari d'ubicació té un cercador d'adreça integrat.  
+En seleccionar un resultat s'emplenen automàticament: `address`, `lat/lng`, `town`, `postal_code`, `zone`.
+
+**APIs de Google necessàries:** Maps JavaScript API · Places API · Geocoding API
+
+### Senyals Django (`signals.py`)
+
+`generate_service_tasks` s'executa amb `post_save` al crear un `Contract`:
+- Crea 1 tasca `DELIVERY` a `start_date`
+- Crea 1 tasca `PICKUP` a `end_date` (si existeix)
+- Assigna `location.default_driver` a totes dues
+
+### Mòduls OBRA / EVENTO
+
+L'aplicació filtra el contingut per mòdul (guardat a la sessió).  
+Els superusuaris veuen tots els mòduls. Els usuaris normals, només el seu grup.  
+Canviar el grup d'un usuari: `Admin → Auth → Users → [usuari] → Groups`.
