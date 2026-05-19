@@ -1,0 +1,209 @@
+/*
+ * admin_loorent_styles.css
+ *
+ * Overrides Tom Select (Bootstrap5 theme) for Loorent brand.
+ * All Tom Select rules are scoped to .th-flt-ts so they don't
+ * interfere with Django admin's own autocomplete widgets.
+ *
+ * Also defines styles for the filter row labels, the extra
+ * filter bar, and the dispatch summary panel.
+ */
+
+
+/* ══════════════════════════════════════════════════════════════════
+   1. SIDEBAR & LAYOUT
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Stretch the main changelist content when the sidebar is hidden */
+#changelist { width: 100% !important; float: none !important; }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   2. TOM SELECT — FIX TRANSPARENCY
+   The Bootstrap5 theme uses CSS custom properties (--bs-*) that are
+   undefined in Django admin, causing fully transparent backgrounds.
+   We force solid colors on every Tom Select layer below.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Wrapper ────────────────────────────────────────────────────── */
+.th-flt-ts {
+    display:    block !important;
+    width:      100% !important;
+    max-width:  200px !important;
+    margin-top: 3px;
+}
+
+/* ── Control (the visible input box) ────────────────────────────── */
+.th-flt-ts .ts-control {
+    background-color: #F0FAF5 !important; /* very pale Loorent green */
+    color:            #374151 !important;
+    border:           1px solid #C3D9CE !important;
+    border-radius:    4px !important;
+    padding:          2px 26px 2px 6px !important;
+    min-height:       0 !important;
+    box-shadow:       none !important;
+    flex-wrap:        nowrap !important;
+    font-size:        .72rem !important;
+    font-family:      inherit !important;
+    cursor:           pointer;
+    opacity:          1 !important;
+}
+
+/* Focus state */
+.th-flt-ts.ts-focus .ts-control {
+    border-color: #0F6B43 !important;
+    box-shadow:   0 0 0 2px rgba(15,107,67,.15) !important;
+    outline:      none !important;
+}
+
+/* Active (a filter value is currently selected) */
+.th-flt-ts.flt-active .ts-control {
+    background-color: #D1EDDF !important;
+    border-color:     #0F6B43 !important;
+    color:            #0F6B43 !important;
+    font-weight:      700 !important;
+}
+
+/* Selected item text inside the control */
+.th-flt-ts .ts-control .item {
+    color:       inherit !important;
+    font-size:   .72rem !important;
+    padding:     0 !important;
+    margin:      0 !important;
+    background:  transparent !important;
+    border:      none !important;
+    box-shadow:  none !important;
+}
+
+/* Search input inside the control */
+.th-flt-ts .ts-control input {
+    background:  transparent !important;
+    color:       #374151 !important;
+    font-size:   .72rem !important;
+    font-family: inherit !important;
+    margin:      0 !important;
+    padding:     0 !important;
+    min-width:   0 !important;
+}
+
+/* Caret arrow (Bootstrap5 theme renders it via ::after) */
+.th-flt-ts.single .ts-control::after {
+    right: 7px !important;
+}
+
+/* ── Dropdown ────────────────────────────────────────────────────── */
+.th-flt-ts .ts-dropdown {
+    background-color: #FFFFFF !important;
+    opacity:          1 !important;
+    z-index:          9999 !important;
+    border:           1px solid #C3D9CE !important;
+    border-top:       none !important;
+    border-radius:    0 0 6px 6px !important;
+    box-shadow:       0 6px 16px rgba(0,0,0,.14) !important;
+    min-width:        180px !important;
+    font-size:        .75rem !important;
+    font-family:      inherit !important;
+    color:            #374151 !important;
+}
+
+/* Dropdown content scroll area */
+.th-flt-ts .ts-dropdown .ts-dropdown-content {
+    background-color: #FFFFFF !important;
+    max-height:       220px !important;
+    overflow-y:       auto !important;
+}
+
+/* Each option row */
+.th-flt-ts .ts-dropdown .option {
+    background-color: #FFFFFF !important;
+    color:            #374151 !important;
+    padding:          5px 10px !important;
+    font-size:        .75rem !important;
+    cursor:           pointer;
+}
+
+/* Hover / keyboard-highlighted option */
+.th-flt-ts .ts-dropdown .option:hover,
+.th-flt-ts .ts-dropdown .option.active {
+    background-color: #0F6B43 !important;
+    color:            #FFFFFF !important;
+}
+
+/* "— Todos —" option (first, value="") */
+.th-flt-ts .ts-dropdown .option[data-value=""] {
+    color:       #6B7280 !important;
+    font-style:  italic;
+}
+.th-flt-ts .ts-dropdown .option[data-value=""]:hover,
+.th-flt-ts .ts-dropdown .option[data-value=""].active {
+    background-color: #F3F4F6 !important;
+    color:            #374151 !important;
+}
+
+/* Search box at the top of the dropdown */
+.th-flt-ts .ts-dropdown .ts-dropdown-content > .ts-dropdown-header,
+.th-flt-ts .ts-wrapper .ts-control.has-search-input {
+    background-color: #F9FAFB !important;
+}
+
+/* Extra bar instances — allow a bit more width */
+#extra-flt-bar .th-flt-ts { max-width: 230px !important; }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   3. FILTER ROW LABELS
+   ══════════════════════════════════════════════════════════════════ */
+
+.th-flt-label {
+    display:        block;
+    font-size:      .58rem;
+    font-weight:    700;
+    color:          #6B9E88;            /* muted Loorent green */
+    margin-top:     5px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    white-space:    nowrap;
+    overflow:       hidden;
+    text-overflow:  ellipsis;
+    max-width:      200px;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   4. EXTRA FILTER BAR  (unmatched filters above the table)
+   ══════════════════════════════════════════════════════════════════ */
+
+#extra-flt-bar {
+    display:         flex;
+    flex-wrap:       wrap;
+    gap:             4px 14px;
+    align-items:     center;
+    padding:         6px 12px;
+    margin-bottom:   8px;
+    background:      #F0FAF5;
+    border:          1px solid #B2DFCF;
+    border-radius:   6px;
+}
+
+#extra-flt-bar .ef-intro {
+    font-size:   .72rem;
+    font-weight: 700;
+    color:       #0F6B43;
+    margin-right: 4px;
+    white-space: nowrap;
+}
+
+#extra-flt-bar .ef-group {
+    display:     flex;
+    align-items: center;
+    gap:         5px;
+}
+
+#extra-flt-bar .ef-label {
+    font-size:   .72rem;
+    font-weight: 600;
+    color:       #374151;
+    white-space: nowrap;
+}
+
+

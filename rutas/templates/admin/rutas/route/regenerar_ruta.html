@@ -1,0 +1,92 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Regenerar ruta · Loorent{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css">
+  <style>
+    .regen-ts.ts-wrapper { display: block; width: 100%; margin-top: 2px; }
+    .regen-ts .ts-control {
+      background-color: #F0FAF5 !important;
+      color: #374151 !important;
+      border: 1px solid #C3D9CE !important;
+      border-radius: 6px !important;
+      padding: 6px 30px 6px 10px !important;
+      min-height: 0 !important;
+      box-shadow: none !important;
+      font-size: .95rem !important;
+      font-family: inherit !important;
+    }
+    .regen-ts.ts-focus .ts-control {
+      border-color: #0F6B43 !important;
+      box-shadow: 0 0 0 2px rgba(15,107,67,.15) !important;
+    }
+    .regen-ts .ts-control .item { color: inherit !important; background: transparent !important; border: none !important; }
+    .regen-ts .ts-control input { background: transparent !important; color: #374151 !important; font-size: .95rem !important; font-family: inherit !important; }
+    .regen-ts .ts-dropdown {
+      background-color: #fff !important;
+      border: 1px solid #C3D9CE !important;
+      border-top: none !important;
+      border-radius: 0 0 6px 6px !important;
+      box-shadow: 0 6px 16px rgba(0,0,0,.12) !important;
+      font-size: .9rem !important;
+      z-index: 9999 !important;
+    }
+    .regen-ts .ts-dropdown .ts-dropdown-content { background: #fff !important; max-height: 240px !important; overflow-y: auto !important; }
+    .regen-ts .ts-dropdown .option { background: #fff !important; color: #374151 !important; padding: 6px 12px !important; }
+    .regen-ts .ts-dropdown .option:hover,
+    .regen-ts .ts-dropdown .option.active { background: #0F6B43 !important; color: #fff !important; }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:520px;margin:2rem auto;">
+  <h1 style="font-size:1.3rem;margin-bottom:1.5rem;">Regenerar ruta d'un conductor</h1>
+
+  <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:1rem 1.2rem;margin-bottom:1.5rem;font-size:.9rem;color:#1E40AF;">
+    Selecciona un conductor i una data. El sistema buscarà totes les tasques
+    d'aquell dia assignades per defecte a aquest conductor, crearà (o reactivarà)
+    la ruta i hi afegirà les parades en ordre.
+  </div>
+
+  <form method="post" style="background:#fff;border:1px solid #E5E7EB;border-radius:8px;padding:1.5rem;">
+    {% csrf_token %}
+    <div style="margin-bottom:1.2rem;">
+      <label style="display:block;font-weight:600;margin-bottom:.4rem;">Conductor</label>
+      <select id="id_driver" name="driver_id" required>
+        {% for driver in drivers %}
+        <option value="{{ driver.pk }}">{{ driver.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="margin-bottom:1.5rem;">
+      <label style="display:block;font-weight:600;margin-bottom:.4rem;">Data</label>
+      <input type="date" name="target_date" value="{{ default_date }}" required
+             style="width:100%;padding:.5rem .75rem;border:1px solid #D1D5DB;border-radius:6px;font-size:.95rem;box-sizing:border-box;">
+    </div>
+    <div style="display:flex;gap:.75rem;">
+      <input type="submit" value="Regenerar ruta"
+             style="background:#0F6B43;color:#fff;border:none;border-radius:6px;padding:.55rem 1.4rem;font-size:.95rem;cursor:pointer;font-weight:600;">
+      <a href="{% url 'admin:rutas_route_changelist' %}"
+         style="padding:.55rem 1rem;border:1px solid #D1D5DB;border-radius:6px;font-size:.95rem;color:#374151;text-decoration:none;">
+        Cancel·lar
+      </a>
+    </div>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var ts = new TomSelect('#id_driver', {
+      create: false,
+      maxOptions: 200,
+      sortField: { field: 'text', direction: 'asc' },
+    });
+    ts.wrapper.classList.add('regen-ts');
+  });
+</script>
+{% endblock %}

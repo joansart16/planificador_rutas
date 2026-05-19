@@ -950,12 +950,13 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
 # Inline: tareas del contrato (solo lectura de tipo/fecha; asignación de chofer/vehículo)
 # ──────────────────────────────────────────────────────────────────────────────
 class ServiceTaskInline(admin.TabularInline):
-    model            = ServiceTask
-    extra            = 0
-    fields           = ('task_type', 'scheduled_date', 'suggested_vehicle_size', 'driver', 'vehicle')
-    readonly_fields  = ('task_type', 'scheduled_date', 'suggested_vehicle_size')
-    ordering         = ('scheduled_date',)
-    show_change_link = True
+    model               = ServiceTask
+    extra               = 0
+    fields              = ('task_type', 'scheduled_date', 'suggested_vehicle_size', 'driver', 'vehicle')
+    readonly_fields     = ('task_type', 'scheduled_date', 'suggested_vehicle_size')
+    ordering            = ('scheduled_date',)
+    show_change_link    = True
+    autocomplete_fields = ('driver', 'vehicle')
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -996,13 +997,17 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
     change_list_template = 'admin/rutas/contract/change_list.html'
     list_display   = (
         'budget_number', '__str__', 'location', 'start_date', 'end_date',
-        'cleaning_frequency', 'cleaning_days_badge', 'coherence_warning_badge', 'status',
+        'cleaning_frequency', 'cleaning_days_badge', 'coherence_warning_badge', 'display_estado',
     )
     list_filter    = ('status', 'location__zone', 'location__company', 'start_date')
     search_fields  = ('location__name', 'location__company__name', 'location__town', 'budget_number')
     date_hierarchy = 'start_date'
     inlines        = [ServiceTaskInline]
     actions        = ['delete_selected']
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
     fieldsets      = (
         ('Módulo', {
             'fields': ('module',),
@@ -1135,6 +1140,17 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
             ),
         )
 
+    @admin.display(description='Estado')
+    def display_estado(self, obj: Contract) -> str:
+        badges = {
+            Contract.Status.ACTIVE:      ('🟢 Activo',       '#0F6B43'),
+            Contract.Status.INTERRUPTED: ('🟡 Interrumpido', '#F59E0B'),
+            Contract.Status.RETIRED:     ('⚫ Retirado',      '#6B7280'),
+            Contract.Status.CANCELLED:   ('🔴 Cancelado',    '#DC2626'),
+        }
+        text, color = badges.get(obj.status, (obj.get_status_display(), '#374151'))
+        return format_html('<span style="color:{};font-weight:600">{}</span>', color, text)
+
     @admin.display(description='Coherencia')
     def coherence_warning_badge(self, obj: Contract) -> str:
         count_days = len(obj.cleaning_weekdays or [])
@@ -1204,17 +1220,22 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
                 self.message_user(request, 'Fecha no válida.', messages.ERROR)
             else:
                 weekday = target_date.weekday()
+                module = _current_module(request)
                 contracts = Contract.objects.filter(
                     status=Contract.Status.ACTIVE,
-                    module=_current_module(request),
+                    module=module,
                     start_date__lte=target_date,
                     cleaning_weekdays__contains=weekday,
                 ).filter(
                     Q(end_date__isnull=True) | Q(end_date__gte=target_date)
-                ).select_related('location')
+                ).select_related('location', 'location__default_driver')
 
                 new_tasks = []
                 skipped_list = []
+                # driver_id → (Driver, [ServiceTask instances])
+                from collections import defaultdict
+                driver_tasks_map = defaultdict(lambda: [None, []])
+
                 for contract in contracts:
                     already = ServiceTask.objects.filter(
                         contract=contract,
@@ -1232,26 +1253,52 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
                     if already or blocked_by_delivery:
                         skipped_list.append((contract, 'ya existe' if already else 'hay entrega/recogida ese día'))
                     else:
-                        new_tasks.append(ServiceTask(
+                        default_driver = contract.location.default_driver if contract.location else None
+                        task = ServiceTask(
                             task_type=ServiceTask.TaskType.LIMPIEZA,
                             scheduled_date=target_date,
                             location=contract.location,
                             contract=contract,
-                            driver=None,
+                            driver=default_driver,
                             vehicle=None,
                             suggested_vehicle_size=contract.location.max_vehicle_size,
-                        ))
+                        )
+                        new_tasks.append(task)
+                        if default_driver:
+                            entry = driver_tasks_map[default_driver.pk]
+                            entry[0] = default_driver
+                            entry[1].append(task)
 
                 ServiceTask.objects.bulk_create(new_tasks)
                 generated = new_tasks
                 skipped   = skipped_list
 
-                if new_tasks:
-                    self.message_user(
-                        request,
-                        f'Generadas {len(new_tasks)} tarea(s) de limpieza para el {target_date}.',
-                        messages.SUCCESS,
+                # ── Auto-crear rutes per conductor ────────────────────────
+                routes_created = 0
+                for driver_pk, (driver, tasks) in driver_tasks_map.items():
+                    route, _ = Route.objects.get_or_create(
+                        date=target_date, driver_id=driver_pk, module=module,
+                        defaults={'name': ''},
                     )
+                    current_max = (
+                        RouteStop.objects.filter(route=route)
+                        .aggregate(m=Max('order'))['m'] or 0
+                    )
+                    stops_to_add = []
+                    for i, task in enumerate(tasks):
+                        if task.pk:
+                            stops_to_add.append(RouteStop(
+                                route=route, task=task, order=current_max + i + 1,
+                            ))
+                    if stops_to_add:
+                        RouteStop.objects.bulk_create(stops_to_add, ignore_conflicts=True)
+                        routes_created += 1
+
+                if new_tasks:
+                    msg = f'Generadas {len(new_tasks)} limpieza(s) para el {target_date}.'
+                    if routes_created:
+                        msg += f' Creadas/actualizadas {routes_created} ruta(s) automáticamente.'
+                    self.message_user(request, msg, messages.SUCCESS)
                 else:
                     self.message_user(
                         request,
@@ -1283,12 +1330,13 @@ import json as _json
 
 
 class RouteStopInline(admin.TabularInline):
-    model   = RouteStop
-    extra   = 1
-    fields  = ('order', 'task')
-    ordering = ('order',)
+    model               = RouteStop
+    extra               = 1
+    fields              = ('order', 'task')
+    ordering            = ('order',)
     verbose_name        = 'Mantenimiento'
     verbose_name_plural = 'Mantenimientos de la ruta'
+    autocomplete_fields = ('task',)
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('task__location', 'task__contract')
@@ -1317,15 +1365,25 @@ class RouteStopInline(admin.TabularInline):
 class RouteAdmin(ModuleFilterMixin, admin.ModelAdmin):
     _module_field = 'module'
 
-    list_display   = ('date', 'module', 'driver', 'vehicle', 'name', 'stop_count', 'map_link')
-    list_filter    = ('date', 'module', 'driver', 'vehicle')
+    list_display   = ('date', 'module', 'driver', 'vehicle', 'name', 'stop_count', 'display_estado', 'map_link')
+    list_filter    = ('date', 'module', 'driver', 'vehicle', 'is_cancelled')
     search_fields  = ('driver__name', 'vehicle__license_plate', 'name')
     date_hierarchy = 'date'
     inlines        = [RouteStopInline]
     autocomplete_fields = ('driver', 'vehicle')
     fieldsets = (
-        (None, {'fields': ('date', 'module', 'driver', 'vehicle', 'name')}),
+        (None, {'fields': ('date', 'module', 'driver', 'vehicle', 'name', 'is_cancelled')}),
     )
+    change_list_template = 'admin/rutas/route/change_list.html'
+
+    @admin.display(description='Estado')
+    def display_estado(self, obj: Route) -> str:
+        if obj.is_cancelled:
+            return format_html('<span style="color:#DC2626;font-weight:600">{}</span>', '🔴 Cancelada')
+        return format_html('<span style="color:#0F6B43;font-weight:600">{}</span>', '🟢 Activa')
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
 
     def get_urls(self):
         urls = super().get_urls()
@@ -1345,8 +1403,202 @@ class RouteAdmin(ModuleFilterMixin, admin.ModelAdmin):
                 self.admin_site.admin_view(self.add_stop_view),
                 name='rutas_route_add_stop',
             ),
+            path(
+                'mapa-dia/<str:iso_date>/',
+                self.admin_site.admin_view(self.mapa_dia_view),
+                name='rutas_route_mapa_dia',
+            ),
+            path(
+                'transfer-stop/',
+                self.admin_site.admin_view(self.transfer_stop_view),
+                name='rutas_route_transfer_stop',
+            ),
+            path(
+                '<int:pk>/export/',
+                self.admin_site.admin_view(self.export_route_view),
+                name='rutas_route_export',
+            ),
+            path(
+                'regenerar-ruta/',
+                self.admin_site.admin_view(self.regenerar_ruta_view),
+                name='rutas_route_regenerar',
+            ),
         ]
         return extra + urls
+
+    def regenerar_ruta_view(self, request):
+        from datetime import timedelta
+
+        module    = _current_module(request)
+        drivers   = Driver.objects.filter(routes__module=module).distinct().order_by('name')
+        tomorrow  = timezone.now().date() + timedelta(days=1)
+
+        if request.method == 'POST':
+            try:
+                driver_id   = int(request.POST['driver_id'])
+                target_date = date.fromisoformat(request.POST['target_date'])
+            except (KeyError, ValueError):
+                self.message_user(request, 'Dades invàlides.', messages.ERROR)
+                return redirect(reverse('admin:rutas_route_regenerar'))
+
+            driver = Driver.objects.get(pk=driver_id)
+
+            # Tasks for this driver's locations on this date
+            tasks = list(
+                ServiceTask.objects.filter(
+                    scheduled_date=target_date,
+                    contract__module=module,
+                    location__default_driver=driver,
+                    is_cancelled=False,
+                ).select_related('location').order_by('pk')
+            )
+
+            if not tasks:
+                self.message_user(
+                    request,
+                    f'No hi ha tasques per {driver} el {target_date}. '
+                    'Genera primer els manteniments del dia.',
+                    messages.WARNING,
+                )
+                return redirect(reverse('admin:rutas_route_regenerar'))
+
+            route, created = Route.objects.get_or_create(
+                date=target_date, driver=driver, module=module,
+                defaults={'name': '', 'is_cancelled': False},
+            )
+            if route.is_cancelled:
+                route.is_cancelled = False
+                route.save(update_fields=['is_cancelled'])
+
+            RouteStop.objects.filter(route=route).delete()
+            RouteStop.objects.bulk_create([
+                RouteStop(route=route, task=t, order=i + 1)
+                for i, t in enumerate(tasks)
+            ])
+
+            action = 'creada' if created else 'regenerada'
+            self.message_user(
+                request,
+                f'Ruta de {driver} per {target_date} {action} amb {len(tasks)} parades.',
+                messages.SUCCESS,
+            )
+            return redirect(reverse('admin:rutas_route_mapa', args=[route.pk]))
+
+        return TemplateResponse(
+            request,
+            'admin/rutas/route/regenerar_ruta.html',
+            {
+                'title': 'Regenerar ruta',
+                'drivers': drivers,
+                'default_date': tomorrow.isoformat(),
+                'opts': Route._meta,
+            },
+        )
+
+    def export_route_view(self, request, pk: int):
+        import unicodedata
+        route = Route.objects.select_related('driver', 'vehicle').get(pk=pk)
+        route_stops = (
+            RouteStop.objects.filter(route=route)
+            .select_related('task__location__company', 'task__contract')
+            .order_by('order', 'pk')
+        )
+
+        workbook = Workbook()
+        sheet = workbook.active
+        driver_name = route.driver.name if route.driver else 'Sense conductor'
+        sheet.title = driver_name[:31]
+
+        headers = [
+            'CLIENTE', 'POBLACION', 'ID EXTERNO', 'Nº PRESUPUESTO',
+            'DIRECCION LINEA 2', 'DIRECCION',
+            'LIMPIEZA', 'UNIDADES', 'COMENTARIOS', 'HORA', 'PERSONA DE REF.',
+            'TELÉFONO', 'EMAIL',
+        ]
+        sheet.append(headers)
+
+        for rs in route_stops:
+            task = rs.task
+            location = task.location
+            company = location.company if location else None
+            coords = location.coords_cabin if location else ''
+            budget_num = task.contract.budget_number if task.contract_id else ''
+
+            limpieza_value = ''
+            if task.task_type == ServiceTask.TaskType.LIMPIEZA and task.contract:
+                weekdays = sorted(task.contract.cleaning_weekdays or [])
+                frequency = task.contract.cleaning_frequency or len(weekdays)
+                if frequency <= 1:
+                    limpieza_value = 'S'
+                else:
+                    try:
+                        order_in_week = weekdays.index(task.scheduled_date.weekday()) + 1
+                    except ValueError:
+                        order_in_week = 1
+                    limpieza_value = f'{order_in_week}/{frequency}'
+
+            comments_value = (location.comment if location else '') or ''
+            if task.task_type == ServiceTask.TaskType.ENTREGA:
+                comments_value = 'EO'
+            elif task.task_type == ServiceTask.TaskType.RECOGIDA:
+                comments_value = 'RE'
+
+            contact_email = (
+                (location.email if location and location.email else '')
+                or (company.email if company else '')
+            )
+            main_row = [
+                company.name if company else '',
+                (location.town or '').upper() if location else '',
+                location.name if location else '',
+                budget_num,
+                location.address if location else '',
+                coords,
+                limpieza_value,
+                location.cabin_count if location else 1,
+                comments_value,
+                '',  # HORA
+                location.contact_name if location else '',
+                location.contact_phone if location else '',
+                contact_email,
+            ]
+            if location and location.coords_entrance:
+                entrance_row = list(main_row)
+                entrance_row[5] = location.coords_entrance
+                entrance_row[8] = 'Entrada finca'
+                sheet.append(entrance_row)
+            sheet.append(main_row)
+
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        # ASCII-safe filename
+        raw = f"ruta_{driver_name}_{route.date.isoformat()}"
+        slug = unicodedata.normalize('NFKD', raw).encode('ascii', 'ignore').decode()
+        slug = ''.join(c if c.isalnum() or c in '-_.' else '_' for c in slug)
+        filename = f"{slug}.xlsx"
+
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    def changelist_view(self, request, extra_context=None):
+        from datetime import timedelta
+        from django.utils import timezone
+        extra_context = extra_context or {}
+        today = timezone.now().date()
+        tomorrow = today + timedelta(days=1)
+        today_iso    = today.isoformat()
+        tomorrow_iso = tomorrow.isoformat()
+        extra_context['mapa_dia_url']    = reverse('admin:rutas_route_mapa_dia', args=[today_iso])
+        extra_context['mapa_manana_url'] = reverse('admin:rutas_route_mapa_dia', args=[tomorrow_iso])
+        extra_context['today_iso']    = today_iso
+        extra_context['tomorrow_iso'] = tomorrow_iso
+        return super().changelist_view(request, extra_context=extra_context)
 
     @admin.display(description='Paradas', ordering='stop_count')
     def stop_count(self, obj: Route) -> int:
@@ -1388,19 +1640,91 @@ class RouteAdmin(ModuleFilterMixin, admin.ModelAdmin):
                     has_coords = True
                 except (ValueError, IndexError):
                     pass
-            stops.append({'stop': rs, 'task': task, 'lat': lat, 'lng': lng, 'has_coords': has_coords})
+            ent_lat = ent_lng = ''
+            has_entrance = False
+            if task.location and task.location.coords_entrance:
+                try:
+                    parts = task.location.coords_entrance.split(',')
+                    ent_lat, ent_lng = parts[0].strip(), parts[1].strip()
+                    float(ent_lat); float(ent_lng)
+                    has_entrance = True
+                except (ValueError, IndexError):
+                    pass
+            budget = task.contract.budget_number if task.contract_id else ''
+            stops.append({
+                'stop': rs, 'task': task,
+                'lat': lat, 'lng': lng, 'has_coords': has_coords,
+                'entrance_lat': ent_lat, 'entrance_lng': ent_lng, 'has_entrance': has_entrance,
+                'budget': budget,
+            })
 
-        # Tasks del mismo día/módulo sin RouteStop para esta ruta
-        assigned_task_ids = RouteStop.objects.filter(route=route).values_list('task_id', flat=True)
+        # Tasques del dia sense RouteStop en CAP ruta (no només la d'aquesta ruta)
+        all_routed_task_ids = RouteStop.objects.filter(
+            route__date=route.date,
+            route__module=route.module,
+        ).values_list('task_id', flat=True)
         unassigned = (
             ServiceTask.objects.filter(
                 scheduled_date=route.date,
                 contract__module=route.module,
             )
-            .exclude(pk__in=assigned_task_ids)
+            .exclude(pk__in=all_routed_task_ids)
             .select_related('location', 'contract')
             .order_by('location__name')
         )
+
+        # Parades que pertanyen a altres rutes del mateix dia (per poder traslladar-les)
+        _COLORS = [
+            '#0F6B43', '#2563EB', '#DC2626', '#7C3AED', '#EA580C',
+            '#0891B2', '#65A30D', '#DB2777', '#B45309', '#475569',
+        ]
+        all_day_routes = list(
+            Route.objects.filter(date=route.date, module=route.module)
+            .select_related('driver')
+            .order_by('pk')
+        )
+        other_routes = []
+        for ridx, other_route in enumerate(all_day_routes):
+            if other_route.pk == route.pk:
+                continue
+            other_stops_qs = (
+                RouteStop.objects.filter(route=other_route)
+                .select_related('task__location', 'task__contract')
+                .order_by('order', 'pk')
+            )
+            other_stops = []
+            for rs in other_stops_qs:
+                task = rs.task
+                lat = lng = ent_lat = ent_lng = ''
+                has_coords = has_entrance = False
+                if task.location and task.location.coords_cabin:
+                    try:
+                        parts = task.location.coords_cabin.split(',')
+                        lat, lng = parts[0].strip(), parts[1].strip()
+                        float(lat); float(lng)
+                        has_coords = True
+                    except (ValueError, IndexError):
+                        pass
+                if task.location and task.location.coords_entrance:
+                    try:
+                        parts = task.location.coords_entrance.split(',')
+                        ent_lat, ent_lng = parts[0].strip(), parts[1].strip()
+                        float(ent_lat); float(ent_lng)
+                        has_entrance = True
+                    except (ValueError, IndexError):
+                        pass
+                other_stops.append({
+                    'stop': rs, 'task': task,
+                    'lat': lat, 'lng': lng, 'has_coords': has_coords,
+                    'entrance_lat': ent_lat, 'entrance_lng': ent_lng, 'has_entrance': has_entrance,
+                    'budget': task.contract.budget_number if task.contract_id else '',
+                })
+            if other_stops:
+                other_routes.append({
+                    'route': other_route,
+                    'color': _COLORS[ridx % len(_COLORS)],
+                    'stops': other_stops,
+                })
 
         return TemplateResponse(
             request,
@@ -1409,11 +1733,127 @@ class RouteAdmin(ModuleFilterMixin, admin.ModelAdmin):
                 'route': route,
                 'stops': stops,
                 'unassigned': unassigned,
+                'other_routes': other_routes,
                 'date': route.date,
                 'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
+                'depot_coords': settings.DEPOT_COORDS,
                 'opts': Route._meta,
             },
         )
+
+    def mapa_dia_view(self, request, iso_date: str):
+        from datetime import date as _date
+        import json as _j
+        try:
+            target_date = _date.fromisoformat(iso_date)
+        except ValueError:
+            from django.http import HttpResponseBadRequest
+            return HttpResponseBadRequest('Fecha inválida')
+
+        module = _current_module(request)
+        routes = (
+            Route.objects.filter(date=target_date, module=module)
+            .select_related('driver', 'vehicle')
+            .order_by('pk')
+        )
+
+        COLORS = [
+            '#0F6B43', '#2563EB', '#DC2626', '#7C3AED', '#EA580C',
+            '#0891B2', '#65A30D', '#DB2777', '#B45309', '#475569',
+        ]
+
+        routes_data = []
+        for idx, route in enumerate(routes):
+            route_stops = (
+                RouteStop.objects.filter(route=route)
+                .select_related('task__location')
+                .order_by('order', 'pk')
+            )
+            stops = []
+            for rs in route_stops:
+                task = rs.task
+                lat = lng = ''
+                has_coords = False
+                if task.location and task.location.coords_cabin:
+                    try:
+                        parts = task.location.coords_cabin.split(',')
+                        lat, lng = parts[0].strip(), parts[1].strip()
+                        float(lat); float(lng)
+                        has_coords = True
+                    except (ValueError, IndexError):
+                        pass
+                ent_lat = ent_lng = ''
+                has_entrance = False
+                if task.location and task.location.coords_entrance:
+                    try:
+                        parts = task.location.coords_entrance.split(',')
+                        ent_lat, ent_lng = parts[0].strip(), parts[1].strip()
+                        float(ent_lat); float(ent_lng)
+                        has_entrance = True
+                    except (ValueError, IndexError):
+                        pass
+                stops.append({
+                    'stop_id': rs.pk,
+                    'order': rs.order,
+                    'loc_name': task.location.name if task.location else '—',
+                    'address': task.location.address if task.location else '',
+                    'budget': task.contract.budget_number if task.contract_id else '',
+                    'task_type': task.task_type,
+                    'task_type_label': task.get_task_type_display(),
+                    'lat': lat, 'lng': lng, 'has_coords': has_coords,
+                    'entrance_lat': ent_lat, 'entrance_lng': ent_lng,
+                    'has_entrance': has_entrance,
+                })
+            label_parts = []
+            if route.driver:
+                label_parts.append(route.driver.name)
+            if route.name:
+                label_parts.append(f'({route.name})')
+            routes_data.append({
+                'id': route.pk,
+                'label': ' · '.join(label_parts) or f'Ruta {route.pk}',
+                'name': route.name or '',
+                'driver': route.driver.name if route.driver else '—',
+                'vehicle': str(route.vehicle) if route.vehicle else '—',
+                'color': COLORS[idx % len(COLORS)],
+                'color_idx': idx,
+                'stops': stops,
+                'map_url': reverse('admin:rutas_route_mapa', args=[route.pk]),
+                'export_url': reverse('admin:rutas_route_export', args=[route.pk]),
+            })
+
+        return TemplateResponse(
+            request,
+            'admin/rutas/route/mapa_dia.html',
+            {
+                'date': target_date,
+                'iso_date': iso_date,
+                'routes_json': _j.dumps(routes_data, ensure_ascii=False),
+                'routes': routes_data,
+                'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
+                'depot_coords': settings.DEPOT_COORDS,
+                'opts': Route._meta,
+                'changelist_url': reverse('admin:rutas_route_changelist'),
+            },
+        )
+
+    def transfer_stop_view(self, request):
+        from django.http import JsonResponse
+        if request.method != 'POST':
+            return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+        try:
+            data = _json.loads(request.body)
+            stop = RouteStop.objects.select_related('route').get(pk=int(data['stop_id']))
+            target = Route.objects.get(pk=int(data['target_route_id']))
+            if stop.route.date != target.date or stop.route.module != target.module:
+                return JsonResponse({'ok': False, 'error': 'Rutes de dies o mòduls diferents.'}, status=400)
+            new_order = (RouteStop.objects.filter(route=target).aggregate(m=Max('order'))['m'] or 0) + 1
+            stop.route = target
+            stop.order = new_order
+            stop.save()
+            return JsonResponse({'ok': True})
+        except Exception as exc:
+            return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
 
     def reorder_view(self, request, pk: int):
         from django.http import JsonResponse
@@ -1437,13 +1877,20 @@ class RouteAdmin(ModuleFilterMixin, admin.ModelAdmin):
             task_id = int(data['task_id'])
             route = Route.objects.get(pk=pk)
             task = ServiceTask.objects.get(pk=task_id)
-            current_max = RouteStop.objects.filter(route=route).aggregate(m=Max('order'))['m'] or 0
-            rs, created = RouteStop.objects.get_or_create(
-                route=route, task=task,
-                defaults={'order': current_max + 1},
+            # Prevent assigning the same task to multiple routes on the same day/module
+            existing = (
+                RouteStop.objects.filter(task=task, route__date=route.date, route__module=route.module)
+                .select_related('route__driver')
+                .first()
             )
-            if not created:
-                return JsonResponse({'ok': False, 'error': 'Este mantenimiento ya está en la ruta.'}, status=400)
+            if existing:
+                driver = existing.route.driver.name if existing.route.driver_id else f'Ruta {existing.route.pk}'
+                return JsonResponse(
+                    {'ok': False, 'error': f'Ja està assignat a la ruta de {driver}.'},
+                    status=400,
+                )
+            current_max = RouteStop.objects.filter(route=route).aggregate(m=Max('order'))['m'] or 0
+            rs = RouteStop.objects.create(route=route, task=task, order=current_max + 1)
             return JsonResponse({'ok': True, 'stop_id': rs.pk, 'order': rs.order})
         except Exception as exc:
             return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
@@ -1507,6 +1954,27 @@ class ReassignDriverForm(forms.Form):
     )
 
 
+class TownFilter(admin.SimpleListFilter):
+    title          = 'Pueblo'
+    parameter_name = 'location_town'
+
+    def lookups(self, request, model_admin):
+        qs = model_admin.get_queryset(request)
+        towns = (
+            qs.exclude(location__town='')
+              .exclude(location__town__isnull=True)
+              .values_list('location__town', flat=True)
+              .distinct()
+              .order_by('location__town')
+        )
+        return [(t, t) for t in towns]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(location__town=self.value())
+        return queryset
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # ServiceTask
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1514,18 +1982,31 @@ class ReassignDriverForm(forms.Form):
 class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
     _module_field = 'contract__module'
     change_list_template = 'admin/rutas/servicetask/change_list.html'
+
+    class Media:
+        css = {
+            'all': (
+                'https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css',
+                'rutas/admin/admin_loorent_styles.css',
+            )
+        }
+        js = (
+            'https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js',
+            'rutas/admin/admin_filter_dropdown.js',
+        )
     list_display   = (
-        'budget_number_display', 'task_type', 'scheduled_date', 'location',
-        'driver', 'vehicle', 'suggested_size_badge', 'route_badge', 'contract',
+        'budget_number_display', 'task_type', 'scheduled_date',
+        'location_company', 'location_name', 'location_town',
+        'driver', 'suggested_size_badge', 'route_badge', 'display_estado',
     )
     list_filter    = (
         'task_type',
         ScheduledDateFilter,
         'driver',
-        'vehicle__status',
-        'location__zone',
         'location__company',
-        'contract__status',
+        'location',
+        TownFilter,
+        'is_cancelled',
         PendingAssignmentFilter,
     )
     search_fields       = (
@@ -1533,9 +2014,12 @@ class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
         'location__town', 'vehicle__license_plate', 'contract__budget_number',
     )
     date_hierarchy      = 'scheduled_date'
-    autocomplete_fields = ('driver', 'vehicle', 'location')
-    list_select_related = ('driver', 'vehicle', 'location', 'contract')
+    autocomplete_fields = ('driver', 'vehicle', 'location', 'contract')
+    list_select_related = ('driver', 'vehicle', 'location__company', 'contract')
     actions             = ['delete_selected', 'reassign_driver_action']
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
 
     def get_urls(self):
         urls = super().get_urls()
@@ -1621,14 +2105,12 @@ class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
                         location.contact_phone if location else '',
                         contact_email,
                     ]
-                    sheet.append(main_row)
-
-                    # Fila extra para la entrada de la finca (si existe)
                     if location and location.coords_entrance:
                         entrance_row = list(main_row)
-                        entrance_row[5] = location.coords_entrance  # DIRECCION
-                        entrance_row[8] = 'Entrada finca'           # COMENTARIOS
+                        entrance_row[5] = location.coords_entrance
+                        entrance_row[8] = 'Entrada finca'
                         sheet.append(entrance_row)
+                    sheet.append(main_row)
 
                 buffer = BytesIO()
                 workbook.save(buffer)
@@ -1651,6 +2133,20 @@ class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
                 'opts': self.model._meta,
             },
         )
+
+    @admin.display(description='Empresa', ordering='location__company__name')
+    def location_company(self, obj: ServiceTask) -> str:
+        if obj.location_id and obj.location.company_id:
+            return obj.location.company.name
+        return '—'
+
+    @admin.display(description='Ubicación', ordering='location__name')
+    def location_name(self, obj: ServiceTask) -> str:
+        return obj.location.name if obj.location_id else '—'
+
+    @admin.display(description='Pueblo', ordering='location__town')
+    def location_town(self, obj: ServiceTask) -> str:
+        return obj.location.town if obj.location_id and obj.location.town else '—'
 
     @admin.display(description='Nº presupuesto', ordering='contract__budget_number')
     def budget_number_display(self, obj: ServiceTask) -> str:
@@ -1676,6 +2172,12 @@ class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
             str(stop.route),
             stop.order,
         )
+
+    @admin.display(description='Estado')
+    def display_estado(self, obj: ServiceTask) -> str:
+        if obj.is_cancelled:
+            return format_html('<span style="color:#DC2626;font-weight:600">{}</span>', '🔴 Cancelado')
+        return format_html('<span style="color:#0F6B43;font-weight:600">{}</span>', '🟢 Activo')
 
     # ------------------------------------------------------------------
     # Admin Action · Reasignación masiva de conductor

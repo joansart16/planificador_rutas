@@ -482,6 +482,7 @@ class Contract(models.Model):
         ACTIVE      = 'ACTIVE',       'Activo'
         INTERRUPTED = 'INTERRUPTED',  'Interrumpido'
         RETIRED     = 'RETIRED',      'Retirado'
+        CANCELLED   = 'CANCELLED',    'Cancelado'
 
     class Weekday(models.IntegerChoices):
         MONDAY = 0, 'Lunes'
@@ -550,9 +551,9 @@ class Contract(models.Model):
         ordering            = ['-start_date']
 
     def __str__(self) -> str:
-        location_str = self.location if self.location_id else '?'
-        end_str = str(self.end_date) if self.end_date else '…'
-        return f"Pedido #{self.pk} · {location_str} ({self.start_date} → {end_str})"
+        budget = self.budget_number if self.budget_number else f'#{self.pk}'
+        location_name = self.location.name if self.location_id else '?'
+        return f"{budget} · {location_name}"
 
     def clean(self) -> None:
         errors = {}
@@ -618,6 +619,9 @@ class Route(models.Model):
         verbose_name='Nombre / alias',
         help_text='Opcional. Ej: Ruta Norte, Ruta Sur.',
     )
+    is_cancelled = models.BooleanField(
+        default=False, verbose_name='Cancelada',
+    )
 
     class Meta:
         verbose_name        = 'Ruta'
@@ -678,6 +682,9 @@ class ServiceTask(models.Model):  # forward declaration — RouteStop is defined
         verbose_name='Tamaño sugerido',
         help_text='Calculado automáticamente según tipo de tarea y ubicación.',
     )
+    is_cancelled = models.BooleanField(
+        default=False, verbose_name='Cancelado',
+    )
 
     class Meta:
         verbose_name        = 'Mantenimiento'
@@ -685,11 +692,8 @@ class ServiceTask(models.Model):  # forward declaration — RouteStop is defined
         ordering            = ['scheduled_date', 'task_type']
 
     def __str__(self) -> str:
-        return (
-            f"{self.get_task_type_display()} · "
-            f"{self.scheduled_date} · "
-            f"{self.driver.name if self.driver_id else '—'}"
-        )
+        budget = self.contract.budget_number if self.contract_id else '—'
+        return f"{budget} · {self.get_task_type_display()}"
 
     # ------------------------------------------------------------------
     # REGLAS DE ORO
@@ -804,7 +808,9 @@ class RouteStop(models.Model):
         verbose_name        = 'Mantenimiento de la ruta'
         verbose_name_plural = 'Mantenimientos de la ruta'
         ordering            = ['order', 'pk']
-        unique_together     = [['route', 'task']]
+        constraints         = [
+            models.UniqueConstraint(fields=['task'], name='routestop_task_unique'),
+        ]
 
     def __str__(self) -> str:
         return f"{self.order}. {self.task}"

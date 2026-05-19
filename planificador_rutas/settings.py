@@ -18,7 +18,22 @@ load_dotenv(BASE_DIR / '.env')
 # ---------------------------------------------------------------------------
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-fallback-solo-dev')
 DEBUG       = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
-ALLOWED_HOSTS = ['*'] if DEBUG else ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = (
+    os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
+    if os.environ.get('DJANGO_ALLOWED_HOSTS')
+    else (['*'] if DEBUG else ['localhost', '127.0.0.1'])
+)
+
+# Requerido por Django 4+ cuando hay peticiones HTTPS desde un proxy inverso
+CSRF_TRUSTED_ORIGINS = [
+    f"https://{h.strip()}"
+    for h in ALLOWED_HOSTS
+    if h.strip() and h.strip() not in ('*', 'localhost', '127.0.0.1')
+]
+
+# Nginx pasa la cabecera X-Forwarded-Proto; Django la respeta en producción
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # ---------------------------------------------------------------------------
 # APLICACIONES
@@ -111,7 +126,11 @@ LOCALE_PATHS = [
 # ---------------------------------------------------------------------------
 # ARCHIVOS ESTÁTICOS
 # ---------------------------------------------------------------------------
-STATIC_URL = '/static/'
+STATIC_URL  = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'   # destino de collectstatic
+
+MEDIA_URL  = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -119,3 +138,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # GOOGLE MAPS
 # ---------------------------------------------------------------------------
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
+
+# ---------------------------------------------------------------------------
+# SEDE / DEPOT — Punto de inicio y fin de todas las rutas
+# Sobreescribible via .env: DEPOT_LAT / DEPOT_LNG
+# ---------------------------------------------------------------------------
+DEPOT_COORDS = {
+    'lat': float(os.environ.get('DEPOT_LAT', '39.679469')),
+    'lng': float(os.environ.get('DEPOT_LNG', '2.834119')),
+    'name': os.environ.get('DEPOT_NAME', 'LooRent — Sede'),
+}

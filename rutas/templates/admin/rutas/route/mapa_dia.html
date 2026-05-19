@@ -1,0 +1,592 @@
+{% load l10n %}<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa del día · {{ date|date:"d/m/Y" }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    /* ── Top bar ─────────────────────────────────────────────── */
+    .topbar {
+      background: #0F6B43; color: #fff;
+      padding: 0 1rem; height: 50px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0; gap: 1rem;
+    }
+    .topbar .info { font-size: .9rem; display: flex; align-items: center; gap: 1rem; }
+    .topbar .info strong { font-size: 1rem; }
+    .topbar .actions { display: flex; gap: .5rem; align-items: center; }
+    .topbar a, .topbar button {
+      background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35);
+      color: #fff; border-radius: 6px; padding: .3rem .8rem;
+      font-size: .82rem; cursor: pointer; text-decoration: none; white-space: nowrap;
+    }
+    .topbar a:hover, .topbar button:hover { background: rgba(255,255,255,.32); }
+    .topbar input[type="date"] {
+      background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35);
+      color: #fff; border-radius: 6px; padding: .28rem .5rem;
+      font-size: .82rem; cursor: pointer;
+      color-scheme: dark;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────── */
+    .layout { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ─────────────────────────────────────────────── */
+    .sidebar {
+      width: 300px; flex-shrink: 0;
+      background: #F9FAFB; border-right: 1px solid #E5E7EB;
+      display: flex; flex-direction: column; overflow-y: auto;
+    }
+    .sidebar-header {
+      padding: .7rem 1rem; background: #fff; border-bottom: 1px solid #E5E7EB;
+      font-size: .78rem; font-weight: 700; color: #374151; letter-spacing: .04em;
+      text-transform: uppercase; flex-shrink: 0;
+    }
+
+    /* ── Route block ─────────────────────────────────────────── */
+    .route-block { border-bottom: 1px solid #E5E7EB; }
+    .route-header {
+      padding: .55rem .8rem; display: flex; align-items: center; gap: .5rem;
+      cursor: pointer; user-select: none;
+    }
+    .route-header:hover { background: #F3F4F6; }
+    .route-dot {
+      width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+      border: 2px solid rgba(0,0,0,.15);
+    }
+    .route-title { font-weight: 700; font-size: .85rem; color: #111827; flex: 1; min-width: 0; }
+    .route-meta { font-size: .72rem; color: #6B7280; }
+    .route-toggle { font-size: .65rem; color: #9CA3AF; }
+    .route-link {
+      font-size: .75rem; color: #0F6B43; text-decoration: none; white-space: nowrap;
+    }
+    .route-link:hover { text-decoration: underline; }
+
+    .stop-list { padding: .3rem .5rem .5rem .5rem; display: flex; flex-direction: column; gap: .25rem; }
+    .stop-item {
+      display: flex; align-items: flex-start; gap: .4rem;
+      padding: .35rem .5rem; border-radius: 6px;
+      background: #fff; border: 1px solid #E5E7EB;
+      font-size: .78rem;
+    }
+    .stop-num {
+      width: 20px; height: 20px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .68rem; font-weight: 700; color: #fff; flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .stop-body { flex: 1; min-width: 0; }
+    .stop-name { font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stop-addr { color: #9CA3AF; font-size: .71rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .has-ent { font-size: .68rem; color: #F59E0B; flex-shrink: 0; }
+    .stop-budget { font-size: .68rem; font-weight: 700; color: #0F6B43; }
+
+    /* ── Move button ─────────────────────────────────────────── */
+    .move-wrap { position: relative; flex-shrink: 0; }
+    .move-btn {
+      background: none; border: 1px solid #D1D5DB; border-radius: 4px;
+      width: 20px; height: 20px; cursor: pointer; font-size: .65rem;
+      color: #9CA3AF; display: flex; align-items: center; justify-content: center;
+      padding: 0; opacity: 0; transition: opacity .1s;
+    }
+    .stop-item:hover .move-btn { opacity: 1; }
+    .move-btn:hover { border-color: #6B7280; color: #374151; }
+    .move-menu {
+      position: absolute; right: 0; top: 22px; z-index: 50;
+      background: #fff; border: 1px solid #E5E7EB; border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.12); min-width: 160px;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .move-menu button {
+      padding: .4rem .7rem; text-align: left; border: none; cursor: pointer;
+      font-size: .78rem; color: #fff; font-weight: 600;
+      display: flex; align-items: center; gap: .4rem;
+    }
+    .move-menu button:hover { filter: brightness(1.1); }
+
+    /* ── Drag & Drop ─────────────────────────────────────────────── */
+    .stop-item { cursor: grab; }
+    .stop-item.dragging { opacity: .35; cursor: grabbing; }
+    .stop-item.drag-over-before { border-top: 2px solid #0F6B43; }
+    .stop-item.drag-over-after  { border-bottom: 2px solid #0F6B43; }
+    .stop-list.drop-target { background: rgba(15,107,67,.05); border-radius: 6px; min-height: 40px; }
+
+    /* ── Toast ───────────────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 1000;
+      background: #111827; color: #fff; padding: .55rem 1rem; border-radius: 8px;
+      font-size: .82rem; box-shadow: 0 4px 12px rgba(0,0,0,.3);
+      animation: toastin .2s ease; pointer-events: none;
+    }
+    .toast.error { background: #DC2626; }
+    @keyframes toastin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    .no-routes-msg {
+      text-align: center; padding: 2rem 1rem; color: #9CA3AF; font-size: .85rem;
+    }
+
+    /* ── Map ─────────────────────────────────────────────────── */
+    #map { flex: 1; }
+
+    /* ── Legend overlay ──────────────────────────────────────── */
+    .map-legend {
+      position: absolute; bottom: 1.5rem; left: 320px; z-index: 5;
+      background: rgba(255,255,255,.95); border-radius: 8px;
+      padding: .6rem .9rem; border: 1px solid #E5E7EB;
+      font-size: .78rem; display: flex; flex-direction: column; gap: .3rem;
+      pointer-events: none; min-width: 160px;
+    }
+    .legend-title { font-weight: 700; color: #374151; margin-bottom: .1rem; font-size: .72rem; text-transform: uppercase; }
+    .legend-item { display: flex; align-items: center; gap: .4rem; color: #374151; }
+    .legend-swatch { width: 16px; height: 4px; border-radius: 2px; flex-shrink: 0; }
+    .legend-depot { display: flex; align-items: center; gap: .4rem; color: #374151; margin-top: .3rem; padding-top: .3rem; border-top: 1px solid #E5E7EB; }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="info">
+    <strong>Mapa del día · {{ date|date:"d/m/Y" }}</strong>
+    <span>{{ routes|length }} ruta{{ routes|length|pluralize:"s" }}</span>
+  </div>
+  <div class="actions">
+    <input type="date" id="date-picker" value="{{ iso_date }}"
+           style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:6px;padding:.28rem .5rem;font-size:.82rem;cursor:pointer;color-scheme:dark;">
+    <a href="{{ changelist_url }}">← Rutas</a>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-header">Rutas del día</div>
+
+    {% for route in routes %}
+    <div class="route-block">
+      <div class="route-header" onclick="toggleRoute(this)" data-route-idx="{{ forloop.counter0 }}">
+        <div class="route-dot" style="background:{{ route.color }};"></div>
+        <div>
+          <div class="route-title">{{ route.driver }}</div>
+          <div class="route-meta">{{ route.vehicle }}{% if route.name %} · {{ route.name }}{% endif %} · {{ route.stops|length }} paradas</div>
+        </div>
+        <a href="{{ route.map_url }}" target="_blank" class="route-link" onclick="event.stopPropagation()">✏️</a>
+        <a href="{{ route.export_url }}" class="route-link" onclick="event.stopPropagation()" title="Exportar Excel">📥</a>
+        <span class="route-toggle">▼</span>
+      </div>
+      <div class="stop-list" id="stoplist-{{ route.id }}">
+        {% for stop in route.stops %}
+        <div class="stop-item" draggable="true" data-stop-id="{{ stop.stop_id }}" data-route-id="{{ route.id }}">
+          <div class="stop-num" style="background:{{ route.color }};">{{ forloop.counter }}</div>
+          <div class="stop-body">
+            {% if stop.budget %}<span class="stop-budget">{{ stop.budget }}</span> {% endif %}
+            <div class="stop-name">{{ stop.loc_name }}</div>
+          </div>
+          {% if stop.has_entrance %}<span class="has-ent" title="Entrada finca">🚪</span>{% endif %}
+          <div class="move-wrap">
+            <button class="move-btn" title="Moure a una altra ruta" onclick="event.stopPropagation(); toggleMoveMenu(this, {{ stop.stop_id }}, {{ route.id }})">⇄</button>
+          </div>
+        </div>
+        {% empty %}
+        <div style="color:#9CA3AF;font-size:.78rem;padding:.4rem .5rem;">Sense parades</div>
+        {% endfor %}
+      </div>
+    </div>
+    {% empty %}
+    <div class="no-routes-msg">
+      No hi ha rutes per<br>{{ date|date:"d/m/Y" }}
+    </div>
+    {% endfor %}
+  </div>
+
+  <div style="position:relative;flex:1;">
+    <div id="map" style="width:100%;height:100%;"></div>
+    {% if routes %}
+    <div class="map-legend">
+      <div class="legend-title">Llegenda</div>
+      {% for route in routes %}
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:{{ route.color }};height:5px;border-radius:3px;width:22px;"></div>
+        <span>{{ route.driver }}</span>
+      </div>
+      {% endfor %}
+      <div class="legend-depot">
+        <div style="width:12px;height:12px;border-radius:50%;background:#1D4ED8;flex-shrink:0;"></div>
+        <span>Sede LooRent</span>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  const DEPOT            = { lat: {{ depot_coords.lat|unlocalize }}, lng: {{ depot_coords.lng|unlocalize }}, name: "{{ depot_coords.name|escapejs }}" };
+  const ROUTES           = {{ routes_json|safe }};
+  const TRANSFER_URL     = "{% url 'admin:rutas_route_transfer_stop' %}";
+  const REORDER_URL_TPL  = "{% url 'admin:rutas_route_reorder' 0 %}".replace('/0/reorder/', '/__pk__/reorder/');
+  const CSRF_TOKEN       = "{{ csrf_token }}";
+
+  // Flat lookup: stop_id -> stop data object (shared reference)
+  const stopData = {};
+  ROUTES.forEach(r => r.stops.forEach(s => { stopData[s.stop_id] = s; }));
+
+  let map, renderers = [], depotMarker, allMarkers = [];
+  let dragSrcEl = null, dragSrcStopId = null, dragSrcRouteId = null;
+
+  // ── Map init ──────────────────────────────────────────────────
+  function initMap() {
+    map = new google.maps.Map(document.getElementById('map'), {
+      center: { lat: DEPOT.lat, lng: DEPOT.lng },
+      zoom: 10,
+    });
+    placeDepotMarker();
+    renderAllRoutes();
+  }
+
+  document.addEventListener('DOMContentLoaded', initDragDrop);
+
+  function placeDepotMarker() {
+    depotMarker = new google.maps.Marker({
+      position: { lat: DEPOT.lat, lng: DEPOT.lng },
+      map,
+      title: DEPOT.name,
+      zIndex: 20,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 14,
+        fillColor: '#1D4ED8', fillOpacity: 1,
+        strokeColor: '#fff', strokeWeight: 2,
+      },
+      label: { text: '🏠', fontSize: '13px' },
+    });
+    const iw = new google.maps.InfoWindow({
+      content: `<strong>${DEPOT.name}</strong><br><span style="color:#1D4ED8">Inicio de todas las rutas</span>`,
+    });
+    depotMarker.addListener('click', () => iw.open(map, depotMarker));
+  }
+
+  function buildPhysicalPoints(stops) {
+    const points = [];
+    stops.forEach((stop, i) => {
+      if (!stop.has_coords) return;
+      const stopNum = i + 1;
+      if (stop.has_entrance) {
+        points.push({ lat: parseFloat(stop.entrance_lat), lng: parseFloat(stop.entrance_lng), label: stopNum + 'E', isEntrance: true, stop });
+      }
+      points.push({ lat: parseFloat(stop.lat), lng: parseFloat(stop.lng), label: stop.has_entrance ? stopNum + 'C' : String(stopNum), isEntrance: false, stop });
+    });
+    return points.filter(p => !isNaN(p.lat) && !isNaN(p.lng));
+  }
+
+  function renderAllRoutes() {
+    allMarkers.forEach(m => m.setMap(null));
+    allMarkers = [];
+    renderers.forEach(r => r.setMap(null));
+    renderers = [];
+
+    const bounds = new google.maps.LatLngBounds();
+    bounds.extend({ lat: DEPOT.lat, lng: DEPOT.lng });
+
+    ROUTES.forEach((route, ridx) => {
+      if (!route.stops.length) { renderers.push(null); return; }
+      const color = route.color;
+      const points = buildPhysicalPoints(route.stops);
+
+      points.forEach(pt => {
+        const isE = pt.isEntrance;
+        const marker = new google.maps.Marker({
+          position: { lat: pt.lat, lng: pt.lng },
+          map,
+          title: pt.stop.loc_name,
+          zIndex: 10,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: isE ? 11 : 14,
+            fillColor: isE ? color + 'CC' : color,
+            fillOpacity: 1,
+            strokeColor: '#fff', strokeWeight: 2,
+          },
+          label: { text: pt.label, color: '#fff', fontWeight: 'bold', fontSize: isE ? '9px' : '11px' },
+        });
+        marker._routeIdx = ridx;
+        const budget = pt.stop.budget ? `<span style="color:#0F6B43;font-weight:700">${pt.stop.budget}</span><br>` : '';
+        const iw = new google.maps.InfoWindow({
+          content: `<div style="font-size:12px;max-width:200px;">
+            <strong>${pt.stop.loc_name}</strong><br>
+            ${budget}
+            <span style="color:#6B7280;font-size:11px">${pt.stop.address}</span><br>
+            <span style="color:${color};font-weight:600">${isE ? '🚪 Entrada' : '🚽 Cabina'} · ${route.driver}</span>
+          </div>`,
+        });
+        marker.addListener('click', () => iw.open(map, marker));
+        allMarkers.push(marker);
+        bounds.extend({ lat: pt.lat, lng: pt.lng });
+      });
+
+      if (points.length < 1) { renderers.push(null); return; }
+
+      const renderer = new google.maps.DirectionsRenderer({
+        suppressMarkers: true,
+        polylineOptions: { strokeColor: color, strokeOpacity: 0.85, strokeWeight: 4 },
+      });
+      renderer.setMap(map);
+      renderers.push(renderer);
+
+      const ds = new google.maps.DirectionsService();
+      const destination = { lat: points[points.length - 1].lat, lng: points[points.length - 1].lng };
+      const waypoints   = points.slice(0, -1).map(p => ({ location: { lat: p.lat, lng: p.lng }, stopover: true }));
+
+      if (waypoints.length <= 23) {
+        ds.route({ origin: { lat: DEPOT.lat, lng: DEPOT.lng }, destination, waypoints, travelMode: google.maps.TravelMode.DRIVING, optimizeWaypoints: false },
+          (result, status) => {
+            if (status === 'OK') renderer.setDirections(result);
+            else _fallbackPolyline(color, [{ lat: DEPOT.lat, lng: DEPOT.lng }, ...points]);
+          }
+        );
+      } else {
+        _fallbackPolyline(color, [{ lat: DEPOT.lat, lng: DEPOT.lng }, ...points]);
+      }
+    });
+
+    if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 60 });
+  }
+
+  function _fallbackPolyline(color, points) {
+    new google.maps.Polyline({
+      path: points.map(p => ({ lat: p.lat, lng: p.lng })),
+      geodesic: true, strokeColor: color, strokeOpacity: 0.7, strokeWeight: 3, map,
+    });
+  }
+
+  function toggleRoute(header) {
+    const block  = header.closest('.route-block');
+    const list   = block.querySelector('.stop-list');
+    const arrow  = header.querySelector('.route-toggle');
+    const idx    = parseInt(header.dataset.routeIdx);
+    const hidden = list.style.display === 'none';
+    list.style.display = hidden ? '' : 'none';
+    arrow.textContent  = hidden ? '▼' : '▶';
+    allMarkers.forEach(m => { if (m._routeIdx === idx) m.setVisible(hidden); });
+    const r = renderers[idx];
+    if (r) r.setMap(hidden ? map : null);
+  }
+
+  // ── Drag & Drop ───────────────────────────────────────────────
+  function initDragDrop() {
+    document.querySelectorAll('.stop-list').forEach(list => {
+      list.addEventListener('dragover',  onDragOver);
+      list.addEventListener('dragleave', onDragLeave);
+      list.addEventListener('drop',      onDrop);
+    });
+    refreshDraggables();
+  }
+
+  function refreshDraggables() {
+    document.querySelectorAll('.stop-item').forEach(item => {
+      item.draggable = true;
+      item.ondragstart = onDragStart;
+      item.ondragend   = onDragEnd;
+    });
+  }
+
+  function onDragStart(e) {
+    dragSrcEl      = e.currentTarget;
+    dragSrcStopId  = parseInt(dragSrcEl.dataset.stopId);
+    dragSrcRouteId = parseInt(dragSrcEl.dataset.routeId);
+    dragSrcEl.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dragSrcStopId);
+  }
+
+  function onDragEnd() {
+    if (dragSrcEl) dragSrcEl.classList.remove('dragging');
+    document.querySelectorAll('.drag-over-before, .drag-over-after').forEach(el => {
+      el.classList.remove('drag-over-before', 'drag-over-after');
+    });
+    document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    dragSrcEl = null;
+  }
+
+  function onDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const list = e.currentTarget;
+    list.classList.add('drop-target');
+    // Highlight insert position
+    document.querySelectorAll('.drag-over-before, .drag-over-after').forEach(el => {
+      el.classList.remove('drag-over-before', 'drag-over-after');
+    });
+    const overItem = e.target.closest('.stop-item');
+    if (overItem && overItem !== dragSrcEl) {
+      const rect  = overItem.getBoundingClientRect();
+      const after = e.clientY > rect.top + rect.height / 2;
+      overItem.classList.add(after ? 'drag-over-after' : 'drag-over-before');
+    }
+  }
+
+  function onDragLeave(e) {
+    const list = e.currentTarget;
+    if (!list.contains(e.relatedTarget)) {
+      list.classList.remove('drop-target');
+      document.querySelectorAll('.drag-over-before, .drag-over-after').forEach(el => {
+        el.classList.remove('drag-over-before', 'drag-over-after');
+      });
+    }
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    const list = e.currentTarget;
+    list.classList.remove('drop-target');
+    document.querySelectorAll('.drag-over-before, .drag-over-after').forEach(el => {
+      el.classList.remove('drag-over-before', 'drag-over-after');
+    });
+    if (!dragSrcEl) return;
+
+    const targetRouteId = parseInt(list.id.replace('stoplist-', ''));
+    const overItem = e.target.closest('.stop-item');
+
+    if (overItem && overItem !== dragSrcEl) {
+      const rect  = overItem.getBoundingClientRect();
+      const after = e.clientY > rect.top + rect.height / 2;
+      list.insertBefore(dragSrcEl, after ? overItem.nextSibling : overItem);
+    } else if (!overItem || overItem === dragSrcEl) {
+      if (dragSrcEl.parentElement !== list) list.appendChild(dragSrcEl);
+    }
+
+    const prevRouteId = dragSrcRouteId;
+    dragSrcEl.dataset.routeId = targetRouteId;
+    updateStopNumbers();
+
+    if (targetRouteId !== prevRouteId) {
+      transferAndReorder(dragSrcStopId, prevRouteId, targetRouteId, list);
+    } else {
+      saveRouteOrder(targetRouteId, list);
+    }
+  }
+
+  function saveRouteOrder(routeId, listEl) {
+    const stopIds = [...listEl.querySelectorAll('.stop-item')].map(el => parseInt(el.dataset.stopId));
+    const url = REORDER_URL_TPL.replace('__pk__', routeId);
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify({ order: stopIds }),
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        showToast('Ordre desat');
+        rebuildRoutesFromDOM();
+        renderAllRoutes();
+      } else {
+        showToast('Error: ' + (data.error || 'desconegut'), true);
+      }
+    });
+  }
+
+  function transferAndReorder(stopId, srcRouteId, targetRouteId, targetListEl) {
+    fetch(TRANSFER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify({ stop_id: stopId, target_route_id: targetRouteId }),
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) { showToast('Error: ' + (data.error || 'desconegut'), true); return; }
+      const srcListEl  = document.getElementById('stoplist-' + srcRouteId);
+      const srcStopIds = [...srcListEl.querySelectorAll('.stop-item')].map(el => parseInt(el.dataset.stopId));
+      const tgtStopIds = [...targetListEl.querySelectorAll('.stop-item')].map(el => parseInt(el.dataset.stopId));
+      const srcUrl = REORDER_URL_TPL.replace('__pk__', srcRouteId);
+      const tgtUrl = REORDER_URL_TPL.replace('__pk__', targetRouteId);
+      Promise.all([
+        fetch(srcUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN }, body: JSON.stringify({ order: srcStopIds }) }).then(r => r.json()),
+        fetch(tgtUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN }, body: JSON.stringify({ order: tgtStopIds }) }).then(r => r.json()),
+      ]).then(([s, t]) => {
+        if (s.ok && t.ok) {
+          showToast('Parada moguda');
+          rebuildRoutesFromDOM();
+          renderAllRoutes();
+        } else {
+          showToast('Error desant ordre', true);
+        }
+      });
+    });
+  }
+
+  function rebuildRoutesFromDOM() {
+    ROUTES.forEach(route => {
+      const listEl = document.getElementById('stoplist-' + route.id);
+      if (!listEl) return;
+      route.stops = [...listEl.querySelectorAll('.stop-item')]
+        .map(item => stopData[parseInt(item.dataset.stopId)])
+        .filter(Boolean);
+    });
+  }
+
+  function updateStopNumbers() {
+    document.querySelectorAll('.route-block').forEach(block => {
+      const list      = block.querySelector('.stop-list');
+      const routeId   = parseInt(list.id.replace('stoplist-', ''));
+      const routeObj  = ROUTES.find(r => r.id === routeId);
+      const color     = routeObj ? routeObj.color : '#666';
+      const items     = [...list.querySelectorAll('.stop-item')];
+      items.forEach((item, i) => {
+        const numEl = item.querySelector('.stop-num');
+        if (numEl) { numEl.textContent = i + 1; numEl.style.background = color; }
+      });
+      const meta = block.querySelector('.route-meta');
+      if (meta) {
+        meta.textContent = meta.textContent.replace(/\d+ parada[s]?/, `${items.length} parada${items.length !== 1 ? 's' : ''}`);
+      }
+    });
+  }
+
+  // ── Move button (no-reload) ───────────────────────────────────
+  function toggleMoveMenu(btn, stopId, currentRouteId) {
+    document.querySelectorAll('.move-menu').forEach(m => m.remove());
+    const otherRoutes = ROUTES.filter(r => r.id !== currentRouteId);
+    if (!otherRoutes.length) return;
+    const menu = document.createElement('div');
+    menu.className = 'move-menu';
+    otherRoutes.forEach(r => {
+      const b = document.createElement('button');
+      b.style.background = r.color;
+      b.innerHTML = `&#10230; ${r.driver}`;
+      b.onclick = (e) => { e.stopPropagation(); transferStopViaButton(stopId, currentRouteId, r.id); };
+      menu.appendChild(b);
+    });
+    btn.closest('.move-wrap').appendChild(menu);
+    setTimeout(() => { document.addEventListener('click', () => menu.remove(), { once: true }); }, 0);
+  }
+
+  function transferStopViaButton(stopId, srcRouteId, targetRouteId) {
+    document.querySelectorAll('.move-menu').forEach(m => m.remove());
+    const stopEl   = document.querySelector(`.stop-item[data-stop-id="${stopId}"]`);
+    const tgtList  = document.getElementById('stoplist-' + targetRouteId);
+    tgtList.appendChild(stopEl);
+    stopEl.dataset.routeId = targetRouteId;
+    updateStopNumbers();
+    transferAndReorder(stopId, srcRouteId, targetRouteId, tgtList);
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────
+  function showToast(msg, isError = false) {
+    document.querySelectorAll('.toast').forEach(t => t.remove());
+    const t = document.createElement('div');
+    t.className = 'toast' + (isError ? ' error' : '');
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2500);
+  }
+
+  // ── Date picker ───────────────────────────────────────────────
+  document.getElementById('date-picker').addEventListener('change', function() {
+    const base = window.location.pathname.replace(/\/[^\/]+\/$/, '/');
+    window.location.href = base + this.value + '/';
+  });
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap" async defer></script>
+</body>
+</html>

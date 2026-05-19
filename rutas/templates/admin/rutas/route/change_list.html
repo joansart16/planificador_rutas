@@ -1,0 +1,24 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block object-tools-items %}
+  <li>
+    <a href="{% url 'admin:rutas_route_regenerar' %}"
+       style="background:#7C3AED;color:#fff;padding:.4rem .9rem;border-radius:6px;font-size:.85rem;text-decoration:none;white-space:nowrap;">
+      ↺ Regenerar ruta
+    </a>
+  </li>
+  <li>
+    <a href="{{ mapa_manana_url }}"
+       style="background:#2563EB;color:#fff;padding:.4rem .9rem;border-radius:6px;font-size:.85rem;text-decoration:none;white-space:nowrap;">
+      🗺️ Mañana ({{ tomorrow_iso }})
+    </a>
+  </li>
+  <li>
+    <a href="{{ mapa_dia_url }}"
+       style="background:#0F6B43;color:#fff;padding:.4rem .9rem;border-radius:6px;font-size:.85rem;text-decoration:none;white-space:nowrap;">
+      🗺️ Hoy ({{ today_iso }})
+    </a>
+  </li>
+  {{ block.super }}
+{% endblock %}

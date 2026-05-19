@@ -1,0 +1,44 @@
+name: Deploy · Staging
+
+on:
+  push:
+    branches:
+      - master
+      - main
+      - develop
+
+jobs:
+  deploy:
+    name: SSH → EC2 Staging
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key:      ${{ secrets.SSH_KEY }}
+          # Timeout de conexión (segundos)
+          connect_timeout: 30s
+          script: |
+            set -e
+
+            cd /srv/planificador_rutas
+
+            echo "──── git pull ────"
+            git pull origin master
+
+            echo "──── rebuild & restart web ────"
+            # Reconstruye solo el servicio web (sin tocar db/nginx/certbot)
+            # y lo reemplaza sin downtime prolongado.
+            docker compose -f docker-compose.staging.yml up -d --build web
+
+            echo "──── asegurar el resto de servicios arriba ────"
+            docker compose -f docker-compose.staging.yml up -d
+
+            echo "──── limpiar imágenes antiguas ────"
+            docker image prune -f
+
+            echo "──── estado final ────"
+            docker compose -f docker-compose.staging.yml ps

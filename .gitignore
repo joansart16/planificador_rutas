@@ -1,5 +1,8 @@
 .env
+.env.staging
 __pycache__/
 *.py[cod]
 db.sqlite3
 /static_collected/
+staticfiles/
+media/

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load l10n %}<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -66,6 +66,9 @@
     .stop-card .body { flex: 1; min-width: 0; }
     .stop-card .loc-name { font-weight: 600; font-size: .85rem; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .stop-card .detail { font-size: .75rem; color: #6B7280; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stop-card .has-entrance-icon {
+      font-size: .68rem; color: #F59E0B; flex-shrink: 0; margin-top: 2px; title: 'Tiene entrada de finca';
+    }
     .stop-card .badge {
       font-size: .68rem; font-weight: 600; border-radius: 4px;
       padding: .15rem .45rem; flex-shrink: 0;
@@ -105,6 +108,47 @@
     .unassigned-card .body small { color: #9CA3AF; font-size: .72rem; }
     .empty-msg { text-align: center; color: #9CA3AF; font-size: .82rem; padding: 1rem; }
 
+    /* ── Other-routes panel ──────────────────────────────────── */
+    .other-header {
+      padding: .55rem 1rem; background: #EFF6FF; border-top: 1px solid #BFDBFE;
+      border-bottom: 1px solid #BFDBFE;
+      font-size: .78rem; font-weight: 600; color: #1E40AF;
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none;
+    }
+    .other-header:hover { background: #DBEAFE; }
+    .other-body { overflow-y: auto; max-height: 280px; }
+    .other-search {
+      padding: .4rem .6rem; background: #F9FAFB; border-bottom: 1px solid #E5E7EB;
+      position: sticky; top: 0;
+    }
+    .other-search input {
+      width: 100%; padding: .3rem .55rem; border: 1px solid #D1D5DB; border-radius: 5px;
+      font-size: .78rem; outline: none;
+    }
+    .other-search input:focus { border-color: #0F6B43; box-shadow: 0 0 0 2px rgba(15,107,67,.15); }
+    .other-group-hdr {
+      padding: .35rem .8rem; font-size: .72rem; font-weight: 700; color: #374151;
+      background: #F9FAFB; border-bottom: 1px solid #F3F4F6;
+      display: flex; align-items: center; gap: .4rem; position: sticky; top: 36px;
+    }
+    .other-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .other-stop {
+      padding: .3rem .6rem .3rem 1.4rem;
+      display: flex; align-items: center; gap: .45rem;
+      border-bottom: 1px solid #F3F4F6; font-size: .78rem;
+    }
+    .other-stop:hover { background: #F3F4F6; }
+    .other-stop .ob { flex: 1; min-width: 0; }
+    .other-stop .ob-name { font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .other-stop .ob-bud  { font-size: .68rem; color: #0F6B43; font-weight: 700; }
+    .pull-btn {
+      background: #EFF6FF; border: 1px solid #93C5FD; border-radius: 4px;
+      color: #1D4ED8; font-size: .72rem; padding: .2rem .45rem;
+      cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    }
+    .pull-btn:hover { background: #DBEAFE; border-color: #3B82F6; }
+
     /* ── Map ─────────────────────────────────────────────────── */
     #map { flex: 1; height: 100%; }
 
@@ -128,7 +172,8 @@
     {% if route.name %}<span>{{ route.name }}</span>{% endif %}
   </div>
   <div class="actions">
-    <button id="btn-save" onclick="saveOrder()">💾 Guardar orden</button>
+    <a href="{% url 'admin:rutas_route_export' route.pk %}">📥 Excel</a>
+    <a href="{% url 'admin:rutas_route_mapa_dia' route.date|date:'Y-m-d' %}">🗺️ Todas las rutas del día</a>
     <a href="{% url 'admin:rutas_route_change' route.pk %}">✏️ Editar ruta</a>
     <a href="{% url 'admin:rutas_route_changelist' %}">← Rutas</a>
   </div>
@@ -148,12 +193,17 @@
            data-id="{{ stop.stop.pk }}"
            data-lat="{{ stop.lat }}"
            data-lng="{{ stop.lng }}"
-           data-has-coords="{{ stop.has_coords|yesno:'true,false' }}">
+           data-has-coords="{{ stop.has_coords|yesno:'true,false' }}"
+           data-entrance-lat="{{ stop.entrance_lat }}"
+           data-entrance-lng="{{ stop.entrance_lng }}"
+           data-has-entrance="{{ stop.has_entrance|yesno:'true,false' }}"
+           data-budget="{{ stop.budget }}">
         <div class="num">{{ forloop.counter }}</div>
         <div class="body">
           <div class="loc-name">{{ stop.task.location.name }}</div>
-          <div class="detail">{{ stop.task.location.address|default:"—" }}</div>
+          <div class="detail">{% if stop.budget %}<strong style="color:#0F6B43">{{ stop.budget }}</strong> · {% endif %}{{ stop.task.location.address|default:"—" }}</div>
         </div>
+        {% if stop.has_entrance %}<span class="has-entrance-icon" title="Tiene coordenadas de entrada a finca">🚪</span>{% endif %}
         <span class="badge badge-{{ stop.task.task_type }}">{{ stop.task.get_task_type_display }}</span>
         <div class="stop-arrows">
           <button onclick="moveStop(this, -1)" title="Subir">▲</button>
@@ -166,7 +216,7 @@
     </div>
 
     {% if unassigned %}
-    <div class="unassigned-header">Mantenimientos sin ruta ({{ date|date:"d/m/Y" }})</div>
+    <div class="unassigned-header">Manteniments sense ruta ({{ date|date:"d/m/Y" }})</div>
     <div class="unassigned-list">
       {% for task in unassigned %}
       <div class="unassigned-card" id="unassigned-{{ task.pk }}">
@@ -174,7 +224,56 @@
           <strong>{{ task.location.name }}</strong>
           <small>{{ task.get_task_type_display }} · {{ task.location.address|default:"—"|truncatechars:40 }}</small>
         </div>
-        <button class="add-btn" onclick="addStop({{ task.pk }}, '{{ task.location.name|escapejs }}', '{{ task.location.address|escapejs }}', '{{ task.get_task_type_display }}', '{{ task.task_type }}', '{{ task.location.coords_cabin|escapejs }}')">+ Añadir</button>
+        <button class="add-btn" onclick="addStop(
+            {{ task.pk }},
+            '{{ task.location.name|escapejs }}',
+            '{{ task.location.address|escapejs }}',
+            '{{ task.get_task_type_display }}',
+            '{{ task.task_type }}',
+            '{{ task.location.coords_cabin|escapejs }}',
+            '{{ task.location.coords_entrance|escapejs }}'
+        )">+ Afegir</button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if other_routes %}
+    <div class="other-header" onclick="toggleOtherRoutes(this)">
+      <span>Parades d'altres rutes ({{ date|date:"d/m/Y" }})</span>
+      <span>▶</span>
+    </div>
+    <div class="other-body" id="other-body" style="display:none">
+      <div class="other-search">
+        <input type="text" placeholder="Cerca ubicació..." oninput="filterOther(this.value)">
+      </div>
+      {% for group in other_routes %}
+      <div class="other-group" data-driver="{{ group.route.driver.name|lower|default:'' }}">
+        <div class="other-group-hdr">
+          <div class="other-dot" style="background:{{ group.color }}"></div>
+          {{ group.route.driver.name|default:"Sense conductor" }}
+          <span style="font-weight:400;color:#9CA3AF">({{ group.stops|length }})</span>
+        </div>
+        {% for stop in group.stops %}
+        <div class="other-stop"
+             data-stop-id="{{ stop.stop.pk }}"
+             data-search="{{ stop.task.location.name|lower }} {{ stop.budget|lower }}">
+          <div class="ob">
+            {% if stop.budget %}<div class="ob-bud">{{ stop.budget }}</div>{% endif %}
+            <div class="ob-name">{{ stop.task.location.name }}</div>
+          </div>
+          <button class="pull-btn" onclick="pullStop(this,
+              {{ stop.stop.pk }},
+              '{{ stop.task.location.name|escapejs }}',
+              '{{ stop.task.location.address|default:'—'|escapejs }}',
+              '{{ stop.task.get_task_type_display|escapejs }}',
+              '{{ stop.task.task_type }}',
+              '{{ stop.task.location.coords_cabin|escapejs }}',
+              '{{ stop.task.location.coords_entrance|escapejs }}',
+              '{{ stop.budget|escapejs }}'
+          )">← Aquí</button>
+        </div>
+        {% endfor %}
       </div>
       {% endfor %}
     </div>
@@ -187,85 +286,208 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const ROUTE_ID   = {{ route.pk }};
-  const REORDER_URL = "{% url 'admin:rutas_route_reorder' route.pk %}";
-  const ADD_STOP_URL = "{% url 'admin:rutas_route_add_stop' route.pk %}";
-  const CSRF_TOKEN = "{{ csrf_token }}";
+  const ROUTE_ID      = {{ route.pk }};
+  const REORDER_URL   = "{% url 'admin:rutas_route_reorder' route.pk %}";
+  const ADD_STOP_URL  = "{% url 'admin:rutas_route_add_stop' route.pk %}";
+  const TRANSFER_URL  = "{% url 'admin:rutas_route_transfer_stop' %}";
+  const CSRF_TOKEN    = "{{ csrf_token }}";
+  const DEPOT       = { lat: {{ depot_coords.lat|unlocalize }}, lng: {{ depot_coords.lng|unlocalize }}, name: "{{ depot_coords.name|escapejs }}" };
 
-  // ── Map init ──────────────────────────────────────────────────
-  let map, markers = [], polyline;
+  // ── Map state ─────────────────────────────────────────────────
+  let map, markers = [], directionsService, directionsRenderer, fallbackPolyline;
 
   function initMap() {
     map = new google.maps.Map(document.getElementById('map'), {
-      center: { lat: 39.6953, lng: 3.0176 },  // center of Mallorca
+      center: { lat: DEPOT.lat, lng: DEPOT.lng },
       zoom: 10,
     });
+    directionsService  = new google.maps.DirectionsService();
+    directionsRenderer = new google.maps.DirectionsRenderer({
+      suppressMarkers: true,
+      polylineOptions: { strokeColor: '#0F6B43', strokeOpacity: 0.85, strokeWeight: 4 },
+    });
+    directionsRenderer.setMap(map);
     renderMap();
   }
 
+  // ── Depot marker ──────────────────────────────────────────────
+  function placeDepotMarker() {
+    const marker = new google.maps.Marker({
+      position: { lat: DEPOT.lat, lng: DEPOT.lng },
+      map,
+      title: DEPOT.name,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 14,
+        fillColor: '#1D4ED8',
+        fillOpacity: 1,
+        strokeColor: '#fff',
+        strokeWeight: 2,
+      },
+      label: { text: '🏠', fontSize: '14px', color: '#fff' },
+      zIndex: 10,
+    });
+    const iw = new google.maps.InfoWindow({
+      content: `<div style="font-size:13px;max-width:200px;">
+        <strong>${DEPOT.name}</strong><br>
+        <span style="color:#1D4ED8;font-weight:600">Inicio de ruta</span>
+      </div>`,
+    });
+    marker.addListener('click', () => iw.open(map, marker));
+    markers.push(marker);
+  }
+
+  // ── Build physical waypoint list from current stop cards ──────
+  // Each stop with entrance produces two points: E then C.
+  function buildPhysicalPoints() {
+    const cards = document.querySelectorAll('#stop-list .stop-card');
+    const points = [];
+
+    cards.forEach((card, i) => {
+      if (!card.dataset.hasCoords || card.dataset.hasCoords === 'false') return;
+      const cabinLat = parseFloat(card.dataset.lat);
+      const cabinLng = parseFloat(card.dataset.lng);
+      if (isNaN(cabinLat) || isNaN(cabinLng)) return;
+
+      const stopNum     = i + 1;
+      const hasEntrance = card.dataset.hasEntrance === 'true';
+
+      if (hasEntrance) {
+        const eLat = parseFloat(card.dataset.entranceLat);
+        const eLng = parseFloat(card.dataset.entranceLng);
+        if (!isNaN(eLat) && !isNaN(eLng)) {
+          points.push({ lat: eLat, lng: eLng, label: stopNum + 'E', cardIdx: i, isEntrance: true });
+        }
+      }
+      points.push({
+        lat: cabinLat, lng: cabinLng,
+        label: hasEntrance ? stopNum + 'C' : String(stopNum),
+        cardIdx: i, isEntrance: false,
+      });
+    });
+
+    return points;
+  }
+
+  // ── Render map ────────────────────────────────────────────────
   function renderMap() {
     markers.forEach(m => m.setMap(null));
     markers = [];
-    if (polyline) polyline.setMap(null);
 
+    // Recreate renderer to clear stale directions
+    directionsRenderer.setMap(null);
+    directionsRenderer = new google.maps.DirectionsRenderer({
+      suppressMarkers: true,
+      polylineOptions: { strokeColor: '#0F6B43', strokeOpacity: 0.85, strokeWeight: 4 },
+    });
+    directionsRenderer.setMap(map);
+    if (fallbackPolyline) { fallbackPolyline.setMap(null); fallbackPolyline = null; }
+
+    // Always show the depot marker
+    placeDepotMarker();
+
+    const points = buildPhysicalPoints();
+
+    // ── Place stop markers ─────────────────────────────────────
     const cards = document.querySelectorAll('#stop-list .stop-card');
-    const path  = [];
-
-    cards.forEach((card, i) => {
-      const lat = parseFloat(card.dataset.lat);
-      const lng = parseFloat(card.dataset.lng);
-      if (!card.dataset.hasCoords || card.dataset.hasCoords === 'false' || isNaN(lat) || isNaN(lng)) return;
-
-      const pos = { lat, lng };
-      path.push(pos);
+    points.forEach(pt => {
+      const card      = cards[pt.cardIdx];
+      const locName   = card.querySelector('.loc-name').textContent;
+      const detail    = card.querySelector('.detail').textContent;
+      const isE       = pt.isEntrance;
+      const color     = isE ? '#F59E0B' : '#0F6B43';
+      const scale     = isE ? 13 : 16;
+      const fontSize  = isE ? '10px' : '12px';
 
       const marker = new google.maps.Marker({
-        position: pos,
+        position: { lat: pt.lat, lng: pt.lng },
         map,
-        label: { text: String(i + 1), color: '#fff', fontWeight: 'bold', fontSize: '12px' },
-        title: card.querySelector('.loc-name').textContent,
+        label: { text: pt.label, color: '#fff', fontWeight: 'bold', fontSize },
+        title: locName + (isE ? ' — Entrada finca' : ''),
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
-          scale: 16,
-          fillColor: '#0F6B43',
+          scale,
+          fillColor: color,
           fillOpacity: 1,
           strokeColor: '#fff',
           strokeWeight: 2,
         },
       });
 
+      const budget = card.dataset.budget || '';
       const infoWindow = new google.maps.InfoWindow({
-        content: `<div style="font-size:13px;max-width:200px;">
-          <strong>${card.querySelector('.loc-name').textContent}</strong><br>
-          <span style="color:#6B7280">${card.querySelector('.detail').textContent}</span><br>
-          <span style="color:#0F6B43;font-weight:600">Parada ${i + 1}</span>
+        content: `<div style="font-size:13px;max-width:220px;">
+          <strong>${locName}</strong><br>
+          ${budget ? `<span style="color:#0F6B43;font-weight:700">${budget}</span><br>` : ''}
+          <span style="color:#6B7280">${detail.replace(/<[^>]+>/g,'')}</span><br>
+          <span style="color:${color};font-weight:600">${isE ? '🚪 Entrada finca' : '🚽 Cabina'} · Parada ${pt.label}</span>
         </div>`,
       });
       marker.addListener('click', () => infoWindow.open(map, marker));
       markers.push(marker);
     });
 
-    if (path.length >= 2) {
-      polyline = new google.maps.Polyline({
-        path,
-        geodesic: true,
-        strokeColor: '#0F6B43',
-        strokeOpacity: 0.8,
-        strokeWeight: 3,
-      });
-      polyline.setMap(map);
+    // ── Fit bounds (depot + all stops) ─────────────────────────
+    const bounds = new google.maps.LatLngBounds();
+    bounds.extend({ lat: DEPOT.lat, lng: DEPOT.lng });
+    points.forEach(pt => bounds.extend({ lat: pt.lat, lng: pt.lng }));
+    map.fitBounds(bounds, { padding: 60 });
+
+    if (points.length === 0) { updateArrows(); return; }
+
+    // ── Road routing: Depot → paradas → última parada ─────────
+    // Google Directions: origen = sede LooRent, destino = última parada
+    const destination = { lat: points[points.length - 1].lat, lng: points[points.length - 1].lng };
+    const waypoints   = points.slice(0, -1).map(pt => ({
+      location: { lat: pt.lat, lng: pt.lng },
+      stopover: true,
+    }));
+
+    // Max 25 waypoints total (origin + waypoints + destination)
+    // origin=depot, so we have 1 + waypoints.length + 1 ≤ 25 → waypoints ≤ 23
+    if (waypoints.length > 23) {
+      showToast('Demasiadas paradas para ruta por carretera (máx 25 incl. sede). Mostrando línea recta.', true);
+      drawFallbackPolyline([{ lat: DEPOT.lat, lng: DEPOT.lng }, ...points]);
+      updateArrows();
+      return;
     }
 
-    if (path.length > 0) {
-      const bounds = new google.maps.LatLngBounds();
-      path.forEach(p => bounds.extend(p));
-      map.fitBounds(bounds, { padding: 60 });
-    }
+    directionsService.route(
+      {
+        origin: { lat: DEPOT.lat, lng: DEPOT.lng },
+        destination,
+        waypoints,
+        travelMode: google.maps.TravelMode.DRIVING,
+        optimizeWaypoints: false,
+      },
+      (result, status) => {
+        if (status === 'OK') {
+          directionsRenderer.setDirections(result);
+        } else {
+          console.warn('Directions API error:', status);
+          drawFallbackPolyline([{ lat: DEPOT.lat, lng: DEPOT.lng }, ...points]);
+          if (status !== 'ZERO_RESULTS') {
+            showToast('No se pudo calcular ruta por carretera. Mostrando línea recta.', true);
+          }
+        }
+      }
+    );
 
-    // Update arrow disabled state
     updateArrows();
   }
 
+  function drawFallbackPolyline(points) {
+    fallbackPolyline = new google.maps.Polyline({
+      path: points.map(pt => ({ lat: pt.lat, lng: pt.lng })),
+      geodesic: true,
+      strokeColor: '#0F6B43',
+      strokeOpacity: 0.7,
+      strokeWeight: 3,
+      map,
+    });
+  }
+
+  // ── Arrow buttons / counter ───────────────────────────────────
   function updateArrows() {
     const cards = document.querySelectorAll('#stop-list .stop-card');
     cards.forEach((card, i) => {
@@ -279,8 +501,8 @@
 
   // ── Reorder via arrows ────────────────────────────────────────
   function moveStop(btn, dir) {
-    const card = btn.closest('.stop-card');
-    const list = document.getElementById('stop-list');
+    const card  = btn.closest('.stop-card');
+    const list  = document.getElementById('stop-list');
     const cards = Array.from(list.querySelectorAll('.stop-card'));
     const idx   = cards.indexOf(card);
     const target = cards[idx + dir];
@@ -288,6 +510,7 @@
     if (dir === -1) list.insertBefore(card, target);
     else list.insertBefore(target, card);
     renderMap();
+    saveOrder();
   }
 
   // ── Drag and drop ─────────────────────────────────────────────
@@ -297,10 +520,11 @@
     dragSrc = e.target.closest('.stop-card');
     if (dragSrc) { dragSrc.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
   });
-  document.addEventListener('dragend', e => {
+  document.addEventListener('dragend', () => {
     document.querySelectorAll('.stop-card').forEach(c => c.classList.remove('dragging', 'drag-over'));
     dragSrc = null;
     renderMap();
+    saveOrder();
   });
   document.addEventListener('dragover', e => {
     e.preventDefault();
@@ -314,8 +538,8 @@
     e.preventDefault();
     const over = e.target.closest('.stop-card');
     if (over && dragSrc && over !== dragSrc) {
-      const list  = document.getElementById('stop-list');
-      const cards = Array.from(list.querySelectorAll('.stop-card'));
+      const list   = document.getElementById('stop-list');
+      const cards  = Array.from(list.querySelectorAll('.stop-card'));
       const srcIdx = cards.indexOf(dragSrc);
       const dstIdx = cards.indexOf(over);
       if (srcIdx < dstIdx) list.insertBefore(dragSrc, over.nextSibling);
@@ -323,14 +547,9 @@
     }
   });
 
-  // ── Save order ────────────────────────────────────────────────
+  // ── Save order (auto) ─────────────────────────────────────────
   function saveOrder() {
-    const btn = document.getElementById('btn-save');
-    btn.classList.add('saving');
-    btn.textContent = 'Guardando…';
-
     const ids = Array.from(document.querySelectorAll('#stop-list .stop-card')).map(c => parseInt(c.dataset.id));
-
     fetch(REORDER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
@@ -338,20 +557,14 @@
     })
     .then(r => r.json())
     .then(data => {
-      btn.classList.remove('saving');
-      btn.textContent = '💾 Guardar orden';
-      if (data.ok) showToast('Orden guardado correctamente');
-      else showToast('Error: ' + (data.error || 'desconocido'), true);
+      if (data.ok) showToast('Ordre desat');
+      else showToast('Error: ' + (data.error || 'desconegut'), true);
     })
-    .catch(() => {
-      btn.classList.remove('saving');
-      btn.textContent = '💾 Guardar orden';
-      showToast('Error de red', true);
-    });
+    .catch(() => showToast('Error de xarxa', true));
   }
 
   // ── Add stop from unassigned ──────────────────────────────────
-  function addStop(taskId, name, address, typeLabel, typeCode, coords) {
+  function addStop(taskId, name, address, typeLabel, typeCode, coordsCabin, coordsEntrance) {
     fetch(ADD_STOP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
@@ -362,32 +575,42 @@
       if (!data.ok) { showToast('Error: ' + (data.error || ''), true); return; }
 
       let lat = '', lng = '', hasCoords = 'false';
-      if (coords) {
-        const parts = coords.split(',');
-        if (parts.length === 2) {
-          lat = parts[0].trim(); lng = parts[1].trim();
-          hasCoords = 'true';
-        }
+      if (coordsCabin) {
+        const p = coordsCabin.split(',');
+        if (p.length === 2) { lat = p[0].trim(); lng = p[1].trim(); hasCoords = 'true'; }
       }
 
-      const list = document.getElementById('stop-list');
-      // Remove empty message if present
+      let entLat = '', entLng = '', hasEntrance = 'false';
+      if (coordsEntrance) {
+        const p = coordsEntrance.split(',');
+        if (p.length === 2) { entLat = p[0].trim(); entLng = p[1].trim(); hasEntrance = 'true'; }
+      }
+
+      const list  = document.getElementById('stop-list');
       const empty = list.querySelector('.empty-msg');
       if (empty) empty.remove();
 
       const div = document.createElement('div');
-      div.className = 'stop-card';
-      div.draggable = true;
-      div.dataset.id = data.stop_id;  // RouteStop PK (for reorder)
-      div.dataset.lat = lat;
-      div.dataset.lng = lng;
-      div.dataset.hasCoords = hasCoords;
+      div.className  = 'stop-card';
+      div.draggable  = true;
+      div.dataset.id          = data.stop_id;
+      div.dataset.lat         = lat;
+      div.dataset.lng         = lng;
+      div.dataset.hasCoords   = hasCoords;
+      div.dataset.entranceLat = entLat;
+      div.dataset.entranceLng = entLng;
+      div.dataset.hasEntrance = hasEntrance;
+
+      const entranceIcon = hasEntrance === 'true'
+        ? '<span class="has-entrance-icon" title="Tiene coordenadas de entrada a finca">🚪</span>' : '';
+
       div.innerHTML = `
         <div class="num">?</div>
         <div class="body">
           <div class="loc-name">${name}</div>
           <div class="detail">${address}</div>
         </div>
+        ${entranceIcon}
         <span class="badge badge-${typeCode}">${typeLabel}</span>
         <div class="stop-arrows">
           <button onclick="moveStop(this,-1)" title="Subir">▲</button>
@@ -395,21 +618,105 @@
         </div>`;
       list.appendChild(div);
 
-      // Remove from unassigned panel
       const card = document.getElementById('unassigned-' + taskId);
       if (card) card.remove();
 
       renderMap();
-      showToast('Parada añadida');
+      saveOrder();
+      showToast('Parada afegida');
+    });
+  }
+
+  // ── Other-routes panel ───────────────────────────────────────
+  function toggleOtherRoutes(hdr) {
+    const body   = document.getElementById('other-body');
+    const arrow  = hdr.querySelector('span:last-child');
+    const hidden = body.style.display === 'none';
+    body.style.display = hidden ? '' : 'none';
+    arrow.textContent  = hidden ? '▼' : '▶';
+  }
+
+  function filterOther(q) {
+    const lower = q.toLowerCase().trim();
+    document.querySelectorAll('.other-stop').forEach(el => {
+      const hay = el.dataset.search || '';
+      el.style.display = (!lower || hay.includes(lower)) ? '' : 'none';
+    });
+  }
+
+  function pullStop(btn, stopId, name, address, typeLabel, typeCode, coordsCabin, coordsEntrance, budget) {
+    btn.disabled = true;
+    fetch(TRANSFER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify({ stop_id: stopId, target_route_id: ROUTE_ID }),
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) {
+        btn.disabled = false;
+        showToast('Error: ' + (data.error || 'desconegut'), true);
+        return;
+      }
+
+      let lat = '', lng = '', hasCoords = 'false';
+      if (coordsCabin) {
+        const p = coordsCabin.split(',');
+        if (p.length === 2) { lat = p[0].trim(); lng = p[1].trim(); hasCoords = 'true'; }
+      }
+      let entLat = '', entLng = '', hasEntrance = 'false';
+      if (coordsEntrance) {
+        const p = coordsEntrance.split(',');
+        if (p.length === 2) { entLat = p[0].trim(); entLng = p[1].trim(); hasEntrance = 'true'; }
+      }
+
+      const list  = document.getElementById('stop-list');
+      const empty = list.querySelector('.empty-msg');
+      if (empty) empty.remove();
+
+      const div = document.createElement('div');
+      div.className  = 'stop-card';
+      div.draggable  = true;
+      div.dataset.id          = stopId;
+      div.dataset.lat         = lat;
+      div.dataset.lng         = lng;
+      div.dataset.hasCoords   = hasCoords;
+      div.dataset.entranceLat = entLat;
+      div.dataset.entranceLng = entLng;
+      div.dataset.hasEntrance = hasEntrance;
+      div.dataset.budget      = budget;
+
+      const entranceIcon = hasEntrance === 'true' ? '<span class="has-entrance-icon" title="Té coordenades d\'entrada">🚪</span>' : '';
+      const budgetHtml   = budget ? `<strong style="color:#0F6B43">${budget}</strong> · ` : '';
+      div.innerHTML = `
+        <div class="num">?</div>
+        <div class="body">
+          <div class="loc-name">${name}</div>
+          <div class="detail">${budgetHtml}${address}</div>
+        </div>
+        ${entranceIcon}
+        <span class="badge badge-${typeCode}">${typeLabel}</span>
+        <div class="stop-arrows">
+          <button onclick="moveStop(this,-1)" title="Pujar">▲</button>
+          <button onclick="moveStop(this,1)" title="Baixar">▼</button>
+        </div>`;
+      list.appendChild(div);
+
+      // Remove from other-routes panel
+      btn.closest('.other-stop').remove();
+
+      renderMap();
+      saveOrder();
+      showToast(`${name} assignada a aquesta ruta`);
     });
   }
 
   function showToast(msg, isError = false) {
     const t = document.getElementById('toast');
-    t.textContent = msg;
+    t.textContent  = msg;
     t.style.background = isError ? '#DC2626' : '#0F6B43';
     t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2500);
+    setTimeout(() => t.classList.remove('show'), 3000);
   }
 </script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap" async defer></script>
