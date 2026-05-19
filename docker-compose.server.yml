@@ -123,9 +123,8 @@ services:
       PROD_DB_PASSWORD:    ${PROD_DB_PASSWORD}
     entrypoint: >
       /bin/sh -c "
-        chmod +x /sync/db_sync.sh &&
         mkdir -p /var/spool/cron/crontabs &&
-        printf '0 2 * * 6\t/sync/db_sync.sh >> /var/log/db_sync.log 2>&1\n' > /var/spool/cron/crontabs/root &&
+        printf '0 2 * * 6\tsh /sync/db_sync.sh >> /var/log/db_sync.log 2>&1\n' > /var/spool/cron/crontabs/root &&
         chmod 600 /var/spool/cron/crontabs/root &&
         touch /var/log/db_sync.log &&
         crond -f -d 8"
