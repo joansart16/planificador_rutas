@@ -1,0 +1,60 @@
+name: Deploy · Production
+
+on:
+  # Disparo manual desde GitHub: Actions → Deploy · Production → Run workflow
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión a desplegar (ej: 0.2.0)'
+        required: true
+        type: string
+
+  # También se dispara automáticamente al publicar un Release en GitHub
+  release:
+    types: [published]
+
+jobs:
+  deploy:
+    name: SSH → EC2 Production
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Determinar versión
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "version=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=v${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.PROD_SSH_HOST }}
+          username: ${{ secrets.PROD_SSH_USERNAME }}
+          key:      ${{ secrets.PROD_SSH_KEY }}
+          connect_timeout: 30s
+          script: |
+            set -e
+
+            cd /srv/planificador_rutas
+
+            echo "──── git fetch + checkout ${{ steps.ver.outputs.version }} ────"
+            git fetch --tags origin
+            git checkout ${{ steps.ver.outputs.version }}
+
+            echo "──── rebuild & restart web ────"
+            docker compose --env-file .env.production -f docker-compose.production.yml up -d --build web
+
+            echo "──── asegurar el resto de servicios arriba ────"
+            docker compose --env-file .env.production -f docker-compose.production.yml up -d
+
+            echo "──── limpiar imágenes antiguas ────"
+            docker image prune -f
+
+            echo "──── estado final ────"
+            docker compose --env-file .env.production -f docker-compose.production.yml ps
+
+            echo "──── versión desplegada ────"
+            cat VERSION
