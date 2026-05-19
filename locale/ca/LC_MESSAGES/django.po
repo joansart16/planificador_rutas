@@ -7,12 +7,80 @@ msgstr ""
 "Language: ca\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-# Models
+# ── UI genèric ──────────────────────────────────────────────────────────────
+
+msgid "No hay resultados"
+msgstr "No hi ha resultats"
+
+msgid "Panel de control"
+msgstr "Tauler de control"
+
+# Botons object-tools (dalt a la dreta)
+msgid "Cargar Excel"
+msgstr "Carregar Excel"
+
+msgid "Descargar Excel de prueba"
+msgstr "Descarregar Excel de prova"
+
+msgid "Generar limpiezas por día"
+msgstr "Generar neteges per dia"
+
+msgid "Exportar tareas por día"
+msgstr "Exportar tasques per dia"
+
+msgid "Regenerar ruta"
+msgstr "Regenerar ruta"
+
+msgid "Hoy"
+msgstr "Avui"
+
+msgid "Mañana"
+msgstr "Demà"
+
+# ── Driver ──────────────────────────────────────────────────────────────────
+
 msgid "Conductor"
 msgstr "Conductor"
 
 msgid "Conductores"
 msgstr "Conductors"
+
+msgid "Nombre"
+msgstr "Nom"
+
+msgid "Días de trabajo"
+msgstr "Dies de treball"
+
+# ── DriverUnavailability ────────────────────────────────────────────────────
+
+msgid "Indisponibilidad del conductor"
+msgstr "Indisponibilitat del conductor"
+
+msgid "Indisponibilidades del conductor"
+msgstr "Indisponibilitats del conductor"
+
+msgid "Motivo"
+msgstr "Motiu"
+
+msgid "Fecha de fin"
+msgstr "Data de fi"
+
+msgid "Notas"
+msgstr "Notes"
+
+msgid "Vacaciones"
+msgstr "Vacances"
+
+msgid "Baja médica"
+msgstr "Baixa mèdica"
+
+msgid "Asunto personal"
+msgstr "Assumpte personal"
+
+msgid "Otro motivo"
+msgstr "Un altre motiu"
+
+# ── Vehicle ─────────────────────────────────────────────────────────────────
 
 msgid "Vehículo"
 msgstr "Vehicle"
@@ -20,11 +88,48 @@ msgstr "Vehicle"
 msgid "Vehículos"
 msgstr "Vehicles"
 
+msgid "Nombre del vehículo"
+msgstr "Nom del vehicle"
+
+msgid "Matrícula"
+msgstr "Matrícula"
+
+msgid "Tamaño"
+msgstr "Mida"
+
+msgid "Pickup"
+msgstr "Pickup"
+
+msgid "Camión pequeño"
+msgstr "Camió petit"
+
+msgid "Camión grande"
+msgstr "Camió gran"
+
+msgid "Disponible"
+msgstr "Disponible"
+
+msgid "En mantenimiento"
+msgstr "En manteniment"
+
+msgid "Retirado"
+msgstr "Retirat"
+
+# ── Company ─────────────────────────────────────────────────────────────────
+
 msgid "Empresa"
 msgstr "Empresa"
 
 msgid "Empresas"
 msgstr "Empreses"
+
+msgid "Razón social"
+msgstr "Raó social"
+
+msgid "Correo electrónico"
+msgstr "Correu electrònic"
+
+# ── Location ────────────────────────────────────────────────────────────────
 
 msgid "Ubicación"
 msgstr "Ubicació"
@@ -32,17 +137,80 @@ msgstr "Ubicació"
 msgid "Ubicaciones"
 msgstr "Ubicacions"
 
+msgid "Nombre del sitio"
+msgstr "Nom del lloc"
+
+msgid "Empresa / Cliente"
+msgstr "Empresa / Client"
+
+msgid "Persona de contacto"
+msgstr "Persona de contacte"
+
+msgid "Teléfono de contacto"
+msgstr "Telèfon de contacte"
+
+msgid "Email contacto obra"
+msgstr "Email contacte obra"
+
+msgid "Comentario"
+msgstr "Comentari"
+
+msgid "Número de cabinas"
+msgstr "Nombre de cabines"
+
+msgid "Dirección (calle y número)"
+msgstr "Adreça (carrer i número)"
+
+msgid "Población"
+msgstr "Població"
+
+msgid "Municipio"
+msgstr "Municipi"
+
+msgid "Código postal"
+msgstr "Codi postal"
+
+msgid "Zona de Mallorca"
+msgstr "Zona de Mallorca"
+
+msgid "Coordenadas cabina"
+msgstr "Coordenades cabina"
+
+msgid "Coordenadas entrada finca"
+msgstr "Coordenades entrada finca"
+
+msgid "Tamaño máximo de vehículo"
+msgstr "Mida màxima de vehicle"
+
+msgid "Conductor por defecto"
+msgstr "Conductor per defecte"
+
+# Zones
+msgid "Palma"
+msgstr "Palma"
+
+msgid "Serra de Tramuntana"
+msgstr "Serra de Tramuntana"
+
+msgid "Raiguer (Inca / Binissalem)"
+msgstr "Raiguer (Inca / Binissalem)"
+
+msgid "Pla de Mallorca"
+msgstr "Pla de Mallorca"
+
+msgid "Migjorn (Llucmajor / Campos)"
+msgstr "Migjorn (Llucmajor / Campos)"
+
+msgid "Llevant (Manacor / Artà)"
+msgstr "Llevant (Manacor / Artà)"
+
+# ── Contract ────────────────────────────────────────────────────────────────
+
 msgid "Pedido"
 msgstr "Comanda"
 
 msgid "Pedidos"
 msgstr "Comandes"
-
-msgid "Mantenimiento"
-msgstr "Manteniment"
-
-msgid "Mantenimientos"
-msgstr "Manteniments"
 
 msgid "Módulo"
 msgstr "Mòdul"
@@ -59,11 +227,11 @@ msgstr "Actiu"
 msgid "Interrumpido"
 msgstr "Interromput"
 
-msgid "Retirado"
-msgstr "Retirat"
+msgid "Cancelado"
+msgstr "Cancel·lat"
 
-msgid "Nombre"
-msgstr "Nom"
+msgid "Nº presupuesto"
+msgstr "Nº pressupost"
 
 msgid "Fecha de inicio"
 msgstr "Data d'inici"
@@ -71,32 +239,79 @@ msgstr "Data d'inici"
 msgid "Fecha de fin (recogida)"
 msgstr "Data de fi (recollida)"
 
+msgid "Limpiezas por semana"
+msgstr "Neteges per setmana"
+
+msgid "Dias de limpieza"
+msgstr "Dies de neteja"
+
+msgid "Hora de acceso (inicio)"
+msgstr "Hora d'accés (inici)"
+
+msgid "Hora de acceso (fin)"
+msgstr "Hora d'accés (fi)"
+
 msgid "Estado"
 msgstr "Estat"
 
-msgid "Zona de Mallorca"
-msgstr "Zona de Mallorca"
+# ── Route ───────────────────────────────────────────────────────────────────
 
-msgid "Código postal"
-msgstr "Codi postal"
+msgid "Ruta"
+msgstr "Ruta"
 
-msgid "Dirección (calle y número)"
-msgstr "Adreça (carrer i número)"
+msgid "Rutas"
+msgstr "Rutes"
 
-msgid "Población"
-msgstr "Població"
+msgid "Fecha"
+msgstr "Data"
 
-msgid "Municipio"
-msgstr "Municipi"
+msgid "Nombre / alias"
+msgstr "Nom / àlies"
 
-msgid "Número de cabinas"
-msgstr "Nombre de cabines"
+msgid "Cancelada"
+msgstr "Cancel·lada"
 
-msgid "Nº presupuesto"
-msgstr "Nº pressupost"
+# ── ServiceTask ─────────────────────────────────────────────────────────────
 
-msgid "Panel de control"
-msgstr "Tauler de control"
+msgid "Mantenimiento"
+msgstr "Manteniment"
+
+msgid "Mantenimientos"
+msgstr "Manteniments"
+
+msgid "Tipo de tarea"
+msgstr "Tipus de tasca"
+
+msgid "Fecha programada"
+msgstr "Data programada"
+
+msgid "Contrato"
+msgstr "Contracte"
+
+msgid "Tamaño sugerido"
+msgstr "Mida suggerida"
+
+msgid "Entrega"
+msgstr "Lliurament"
+
+msgid "Limpieza"
+msgstr "Neteja"
+
+msgid "Recogida"
+msgstr "Recollida"
+
+# ── RouteStop ───────────────────────────────────────────────────────────────
+
+msgid "Mantenimiento de la ruta"
+msgstr "Manteniment de la ruta"
+
+msgid "Mantenimientos de la ruta"
+msgstr "Manteniments de la ruta"
+
+msgid "Orden"
+msgstr "Ordre"
+
+# ── Days of the week ────────────────────────────────────────────────────────
 
 msgid "Lunes"
 msgstr "Dilluns"
@@ -105,6 +320,9 @@ msgid "Martes"
 msgstr "Dimarts"
 
 msgid "Miércoles"
+msgstr "Dimecres"
+
+msgid "Miercoles"
 msgstr "Dimecres"
 
 msgid "Jueves"
@@ -118,12 +336,3 @@ msgstr "Dissabte"
 
 msgid "Domingo"
 msgstr "Diumenge"
-
-msgid "Entrega"
-msgstr "Lliurament"
-
-msgid "Limpieza"
-msgstr "Neteja"
-
-msgid "Recogida"
-msgstr "Recollida"

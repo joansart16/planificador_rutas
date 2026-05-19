@@ -1,14 +1,15 @@
 {% extends "admin/change_list.html" %}
+{% load i18n %}
 
 {% block object-tools-items %}
   <li>
     <a href="{% url 'admin:rutas_servicetask_export_day' %}" class="addlink">
-      ⬇️ Exportar tareas por día
+      ⬇️ {% trans "Exportar tareas por día" %}
     </a>
   </li>
   <li>
     <a href="{% url 'admin:rutas_contract_generate_tasks' %}" class="addlink">
-      🧹 Generar limpiezas por día
+      🧹 {% trans "Generar limpiezas por día" %}
     </a>
   </li>
   {{ block.super }}

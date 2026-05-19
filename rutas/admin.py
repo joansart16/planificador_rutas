@@ -693,7 +693,7 @@ class DriverAdmin(ExcelImportExportMixin, admin.ModelAdmin):
     def working_days_badge(self, obj: Driver) -> str:
         if not obj.working_days:
             return '—'
-        day_names = dict(Driver.Weekday.choices)
+        day_names = {k: str(v) for k, v in Driver.Weekday.choices}
         selected = [day_names.get(int(day), str(day)) for day in obj.working_days]
         return ', '.join(selected)
 
@@ -1164,7 +1164,7 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
 
     @admin.display(description='Dias limpieza')
     def cleaning_days_badge(self, obj: Contract) -> str:
-        day_names = dict(Contract.Weekday.choices)
+        day_names = {k: str(v) for k, v in Contract.Weekday.choices}
         selected = [day_names.get(int(day), str(day)) for day in (obj.cleaning_weekdays or [])]
         return ', '.join(selected) if selected else '—'
 

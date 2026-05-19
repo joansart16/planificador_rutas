@@ -66,19 +66,44 @@
     color: #fff !important;
   }
 
-  /* Buttons */
+  /* Buttons — !important needed to beat Django admin's CSS variables cascade */
   .button, input[type=submit], input[type=button], .submit-row input, a.button {
-    background: #0F6B43;
-    border-color: #0a4f31;
+    background: #0F6B43 !important;
+    border-color: #0a4f31 !important;
     color: #fff !important;
   }
   .button:hover, input[type=submit]:hover, a.button:hover {
-    background: #0a4f31;
+    background: #0a4f31 !important;
     color: #fff !important;
   }
   .button.default, input[type=submit].default, .submit-row input.default {
-    background: #0F6B43;
-    border-color: #0a4f31;
+    background: #0F6B43 !important;
+    border-color: #0a4f31 !important;
+    color: #fff !important;
+  }
+  /* Search button (#toolbar) and Run/Go action button */
+  #toolbar input[type=submit],
+  #changelist-search input[type=submit],
+  .actions button[type=submit],
+  .actions input[type=submit] {
+    background: #0F6B43 !important;
+    border-color: #0a4f31 !important;
+    color: #fff !important;
+    padding: 5px 14px !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+  }
+  #toolbar input[type=submit]:hover,
+  .actions button[type=submit]:hover {
+    background: #0a4f31 !important;
+  }
+  /* Object-tools (top-right add/action buttons) */
+  .object-tools a:link, .object-tools a:visited {
+    background-color: #0F6B43 !important;
+    color: #fff !important;
+  }
+  .object-tools a:hover {
+    background-color: #0a4f31 !important;
     color: #fff !important;
   }
 
@@ -86,11 +111,7 @@
   a:link, a:visited { color: #0F6B43; }
   a:hover { color: #0a4f31; }
 
-  /* Object tools (add button, etc.) */
-  .object-tools a:link, .object-tools a:visited {
-    background-color: #0F6B43;
-  }
-  .object-tools a:hover { background-color: #0a4f31; }
+  /* Object tools — see consolidated rules above */
 
   /* Calendar / clock widget */
   .calendarbox h2, .clockbox h2 {

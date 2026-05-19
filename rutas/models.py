@@ -3,31 +3,32 @@ import unicodedata
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils.translation import gettext_lazy as _
 
 
 class Driver(models.Model):
     """Conductor con calendario laboral e indisponibilidades."""
 
-    name   = models.CharField(max_length=150, verbose_name='Nombre')
+    name   = models.CharField(max_length=150, verbose_name=_('Nombre'))
     working_days = models.JSONField(
         default=list,
         blank=True,
-        verbose_name='Días de trabajo',
-        help_text='Selecciona de lunes a domingo. Array de 0-6 representando lunes a domingo.',
+        verbose_name=_('Días de trabajo'),
+        help_text=_('Selecciona de lunes a domingo. Array de 0-6 representando lunes a domingo.'),
     )
 
     class Weekday(models.IntegerChoices):
-        MONDAY    = 0, 'Lunes'
-        TUESDAY   = 1, 'Martes'
-        WEDNESDAY = 2, 'Miércoles'
-        THURSDAY  = 3, 'Jueves'
-        FRIDAY    = 4, 'Viernes'
-        SATURDAY  = 5, 'Sábado'
-        SUNDAY    = 6, 'Domingo'
+        MONDAY    = 0, _('Lunes')
+        TUESDAY   = 1, _('Martes')
+        WEDNESDAY = 2, _('Miércoles')
+        THURSDAY  = 3, _('Jueves')
+        FRIDAY    = 4, _('Viernes')
+        SATURDAY  = 5, _('Sábado')
+        SUNDAY    = 6, _('Domingo')
 
     class Meta:
-        verbose_name        = 'Conductor'
-        verbose_name_plural = 'Conductores'
+        verbose_name        = _('Conductor')
+        verbose_name_plural = _('Conductores')
         ordering            = ['name']
 
     def __str__(self) -> str:
@@ -54,35 +55,35 @@ class DriverUnavailability(models.Model):
     """Períodos en los que un conductor no está disponible (vacaciones, baja, etc.)."""
 
     class Reason(models.TextChoices):
-        VACATION   = 'VACATION',   'Vacaciones'
-        SICK_LEAVE = 'SICK_LEAVE', 'Baja médica'
-        PERSONAL   = 'PERSONAL',   'Asunto personal'
-        OTHER      = 'OTHER',      'Otro motivo'
+        VACATION   = 'VACATION',   _('Vacaciones')
+        SICK_LEAVE = 'SICK_LEAVE', _('Baja médica')
+        PERSONAL   = 'PERSONAL',   _('Asunto personal')
+        OTHER      = 'OTHER',      _('Otro motivo')
 
     driver = models.ForeignKey(
         Driver,
         on_delete=models.CASCADE,
         related_name='unavailabilities',
-        verbose_name='Conductor',
+        verbose_name=_('Conductor'),
     )
     reason = models.CharField(
         max_length=20,
         choices=Reason.choices,
-        verbose_name='Motivo',
+        verbose_name=_('Motivo'),
     )
-    start_date = models.DateField(verbose_name='Fecha de inicio')
+    start_date = models.DateField(verbose_name=_('Fecha de inicio'))
     end_date = models.DateField(
-        verbose_name='Fecha de fin',
-        help_text='Si es un solo día, pon la misma fecha que inicio.',
+        verbose_name=_('Fecha de fin'),
+        help_text=_('Si es un solo día, pon la misma fecha que inicio.'),
     )
     notes = models.TextField(
         blank=True, default='',
-        verbose_name='Notas',
+        verbose_name=_('Notas'),
     )
 
     class Meta:
-        verbose_name        = 'Indisponibilidad del conductor'
-        verbose_name_plural = 'Indisponibilidades del conductor'
+        verbose_name        = _('Indisponibilidad del conductor')
+        verbose_name_plural = _('Indisponibilidades del conductor')
         ordering            = ['-start_date']
 
     def __str__(self) -> str:
@@ -100,38 +101,38 @@ class Vehicle(models.Model):
     """Vehículo. Solo los AVAILABLE pueden ser asignados a tareas."""
 
     class Size(models.IntegerChoices):
-        PICKUP = 1, 'Pickup'
-        SMALL  = 2, 'Camión pequeño'
-        LARGE  = 3, 'Camión grande'
+        PICKUP = 1, _('Pickup')
+        SMALL  = 2, _('Camión pequeño')
+        LARGE  = 3, _('Camión grande')
 
     class Status(models.TextChoices):
-        AVAILABLE   = 'AVAILABLE',   'Disponible'
-        MAINTENANCE = 'MAINTENANCE', 'En mantenimiento'
-        RETIRED     = 'RETIRED',     'Retirado'
+        AVAILABLE   = 'AVAILABLE',   _('Disponible')
+        MAINTENANCE = 'MAINTENANCE', _('En mantenimiento')
+        RETIRED     = 'RETIRED',     _('Retirado')
 
     name = models.CharField(
         max_length=120,
         blank=True,
         default='',
-        verbose_name='Nombre del vehículo',
-        help_text='Alias interno del vehículo (ej: Pickup 1, Camión Norte).',
+        verbose_name=_('Nombre del vehículo'),
+        help_text=_('Alias interno del vehículo (ej: Pickup 1, Camión Norte).'),
     )
     license_plate = models.CharField(
-        max_length=20, unique=True, verbose_name='Matrícula'
+        max_length=20, unique=True, verbose_name=_('Matrícula')
     )
     size = models.IntegerField(
-        choices=Size.choices, verbose_name='Tamaño'
+        choices=Size.choices, verbose_name=_('Tamaño')
     )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.AVAILABLE,
-        verbose_name='Estado',
+        verbose_name=_('Estado'),
     )
 
     class Meta:
-        verbose_name        = 'Vehículo'
-        verbose_name_plural = 'Vehículos'
+        verbose_name        = _('Vehículo')
+        verbose_name_plural = _('Vehículos')
         ordering            = ['license_plate']
 
     def __str__(self) -> str:
@@ -143,15 +144,15 @@ class Vehicle(models.Model):
 class Company(models.Model):
     """Empresa o cliente. Agrupa ubicaciones bajo un mismo titular."""
 
-    name  = models.CharField(max_length=200, unique=True, verbose_name='Razón social')
+    name  = models.CharField(max_length=200, unique=True, verbose_name=_('Razón social'))
     email = models.EmailField(
-        verbose_name='Correo electrónico',
-        help_text='Obligatorio. Se usa como fallback en el exportador cuando la ubicación no tiene email propio.',
+        verbose_name=_('Correo electrónico'),
+        help_text=_('Obligatorio. Se usa como fallback en el exportador cuando la ubicación no tiene email propio.'),
     )
 
     class Meta:
-        verbose_name        = 'Empresa'
-        verbose_name_plural = 'Empresas'
+        verbose_name        = _('Empresa')
+        verbose_name_plural = _('Empresas')
         ordering            = ['name']
 
     def __str__(self) -> str:
@@ -167,12 +168,12 @@ class Location(models.Model):
     """
 
     class Zone(models.TextChoices):
-        PALMA      = 'PALMA',      'Palma'
-        TRAMUNTANA = 'TRAMUNTANA', 'Serra de Tramuntana'
-        RAIGUER    = 'RAIGUER',    'Raiguer (Inca / Binissalem)'
-        PLA        = 'PLA',        'Pla de Mallorca'
-        MIGJORN    = 'MIGJORN',    'Migjorn (Llucmajor / Campos)'
-        LLEVANT    = 'LLEVANT',    'Llevant (Manacor / Artà)'
+        PALMA      = 'PALMA',      _('Palma')
+        TRAMUNTANA = 'TRAMUNTANA', _('Serra de Tramuntana')
+        RAIGUER    = 'RAIGUER',    _('Raiguer (Inca / Binissalem)')
+        PLA        = 'PLA',        _('Pla de Mallorca')
+        MIGJORN    = 'MIGJORN',    _('Migjorn (Llucmajor / Campos)')
+        LLEVANT    = 'LLEVANT',    _('Llevant (Manacor / Artà)')
 
     # Mapa normalizado municipio → zona (catalán + castellano)
     _TOWN_ZONE_MAP: dict[str, str] = {
@@ -334,97 +335,97 @@ class Location(models.Model):
         return cls._POSTAL_ZONE_MAP.get(normalized, '')
 
     # ── Identificación ────────────────────────────────────────────────
-    name    = models.CharField(max_length=200, verbose_name='Nombre del sitio')
+    name    = models.CharField(max_length=200, verbose_name=_('Nombre del sitio'))
     company = models.ForeignKey(
         Company,
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='locations',
-        verbose_name='Empresa / Cliente',
-        help_text='Empresa titular. Permite filtrar todas sus ubicaciones.',
+        verbose_name=_('Empresa / Cliente'),
+        help_text=_('Empresa titular. Permite filtrar todas sus ubicaciones.'),
     )
 
     # ── Contacto en obra ─────────────────────────────────────────────
     contact_name  = models.CharField(
         max_length=150, blank=True, default='',
-        verbose_name='Persona de contacto',
-        help_text='Responsable de la obra o punto de servicio.',
+        verbose_name=_('Persona de contacto'),
+        help_text=_('Responsable de la obra o punto de servicio.'),
     )
     contact_phone = models.CharField(
         max_length=20, blank=True, default='',
-        verbose_name='Teléfono de contacto',
+        verbose_name=_('Teléfono de contacto'),
     )
     email = models.EmailField(
         blank=True, default='',
-        verbose_name='Email contacto obra',
-        help_text='Opcional. Si se rellena, se usa en el exportador en lugar del email del cliente.',
+        verbose_name=_('Email contacto obra'),
+        help_text=_('Opcional. Si se rellena, se usa en el exportador en lugar del email del cliente.'),
     )
     comment = models.TextField(
         blank=True,
         default='',
-        verbose_name='Comentario',
-        help_text='Indicaciones operativas para el servicio en esta ubicación.',
+        verbose_name=_('Comentario'),
+        help_text=_('Indicaciones operativas para el servicio en esta ubicación.'),
     )
     cabin_count = models.PositiveIntegerField(
         default=1,
-        verbose_name='Número de cabinas',
-        help_text='Cantidad de cabinas a limpiar en esta ubicación.',
+        verbose_name=_('Número de cabinas'),
+        help_text=_('Cantidad de cabinas a limpiar en esta ubicación.'),
     )
 
     # ── Dirección ─────────────────────────────────────────────────────
-    address     = models.TextField(verbose_name='Dirección (calle y número)')
+    address     = models.TextField(verbose_name=_('Dirección (calle y número)'))
     town        = models.CharField(
         max_length=100, blank=True, default='',
-        verbose_name='Población',
-        help_text='Núcleo habitado (ej: Palmanyola). Se rellena automáticamente.',
+        verbose_name=_('Población'),
+        help_text=_('Núcleo habitado (ej: Palmanyola). Se rellena automáticamente.'),
     )
     municipality = models.CharField(
         max_length=100, blank=True, default='',
-        verbose_name='Municipio',
-        help_text='Municipio administrativo (ej: Bunyola). Se usa para calcular la comarca.',
+        verbose_name=_('Municipio'),
+        help_text=_('Municipio administrativo (ej: Bunyola). Se usa para calcular la comarca.'),
     )
     postal_code = models.CharField(
         max_length=10, blank=True, default='',
-        verbose_name='Código postal',
+        verbose_name=_('Código postal'),
     )
     zone        = models.CharField(
         max_length=20,
         choices=Zone.choices,
         blank=True, default='',
-        verbose_name='Zona de Mallorca',
-        help_text='Comarca o zona de la isla para agrupar y filtrar rutas.',
+        verbose_name=_('Zona de Mallorca'),
+        help_text=_('Comarca o zona de la isla para agrupar y filtrar rutas.'),
     )
 
     # ── Coordenadas ───────────────────────────────────────────────────
     coords_cabin = models.CharField(
         max_length=50, blank=True, default='',
-        verbose_name='Coordenadas cabina',
-        help_text='Pega directamente desde Google Maps (ej: 39.619316, 2.643553).',
+        verbose_name=_('Coordenadas cabina'),
+        help_text=_('Pega directamente desde Google Maps (ej: 39.619316, 2.643553).'),
     )
     coords_entrance = models.CharField(
         max_length=50, blank=True, default='',
-        verbose_name='Coordenadas entrada finca',
-        help_text='Opcional. Si se rellena, el exportador genera una fila adicional con "Entrada finca".',
+        verbose_name=_('Coordenadas entrada finca'),
+        help_text=_('Opcional. Si se rellena, el exportador genera una fila adicional con "Entrada finca".'),
     )
 
     # ── Restricción de vehículo ───────────────────────────────────────
     max_vehicle_size = models.IntegerField(
         choices=Vehicle.Size.choices,
-        verbose_name='Tamaño máximo de vehículo',
-        help_text='Vehículos con tamaño superior serán rechazados (gálibo).',
+        verbose_name=_('Tamaño máximo de vehículo'),
+        help_text=_('Vehículos con tamaño superior serán rechazados (gálibo).'),
     )
     default_driver = models.ForeignKey(
         Driver,
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='default_locations',
-        verbose_name='Conductor por defecto',
-        help_text='Se asignará automáticamente a las tareas de este sitio (puede cambiar después).',
+        verbose_name=_('Conductor por defecto'),
+        help_text=_('Se asignará automáticamente a las tareas de este sitio (puede cambiar después).'),
     )
 
     class Meta:
-        verbose_name        = 'Ubicación'
-        verbose_name_plural = 'Ubicaciones'
+        verbose_name        = _('Ubicación')
+        verbose_name_plural = _('Ubicaciones')
         ordering            = ['company__name', 'name']
 
     def __str__(self) -> str:
@@ -475,79 +476,79 @@ class Contract(models.Model):
     """
 
     class Module(models.TextChoices):
-        OBRA   = 'OBRA',   'Obra'
-        EVENTO = 'EVENTO', 'Evento'
+        OBRA   = 'OBRA',   _('Obra')
+        EVENTO = 'EVENTO', _('Evento')
 
     class Status(models.TextChoices):
-        ACTIVE      = 'ACTIVE',       'Activo'
-        INTERRUPTED = 'INTERRUPTED',  'Interrumpido'
-        RETIRED     = 'RETIRED',      'Retirado'
-        CANCELLED   = 'CANCELLED',    'Cancelado'
+        ACTIVE      = 'ACTIVE',       _('Activo')
+        INTERRUPTED = 'INTERRUPTED',  _('Interrumpido')
+        RETIRED     = 'RETIRED',      _('Retirado')
+        CANCELLED   = 'CANCELLED',    _('Cancelado')
 
     class Weekday(models.IntegerChoices):
-        MONDAY = 0, 'Lunes'
-        TUESDAY = 1, 'Martes'
-        WEDNESDAY = 2, 'Miercoles'
-        THURSDAY = 3, 'Jueves'
-        FRIDAY = 4, 'Viernes'
-        SATURDAY = 5, 'Sábado'
-        SUNDAY = 6, 'Domingo'
+        MONDAY    = 0, _('Lunes')
+        TUESDAY   = 1, _('Martes')
+        WEDNESDAY = 2, _('Miercoles')
+        THURSDAY  = 3, _('Jueves')
+        FRIDAY    = 4, _('Viernes')
+        SATURDAY  = 5, _('Sábado')
+        SUNDAY    = 6, _('Domingo')
 
     module = models.CharField(
         max_length=10,
         choices=Module.choices,
         default=Module.OBRA,
-        verbose_name='Módulo',
-        help_text='Obra o Evento. Determina en qué sección aparece este pedido.',
+        verbose_name=_('Módulo'),
+        help_text=_('Obra o Evento. Determina en qué sección aparece este pedido.'),
     )
     budget_number = models.CharField(
         max_length=50, blank=True, default='',
-        verbose_name='Nº presupuesto',
-        help_text='Número de presupuesto. Clave que identifica esta obra en el sistema.',
+        verbose_name=_('Nº presupuesto'),
+        help_text=_('Número de presupuesto. Clave que identifica esta obra en el sistema.'),
     )
     location = models.ForeignKey(
         Location,
         on_delete=models.PROTECT,
         related_name='contracts',
-        verbose_name='Ubicación',
+        verbose_name=_('Ubicación'),
     )
-    start_date         = models.DateField(verbose_name='Fecha de inicio')
+    start_date         = models.DateField(verbose_name=_('Fecha de inicio'))
     end_date           = models.DateField(
         null=True, blank=True,
-        verbose_name='Fecha de fin (recogida)',
-        help_text='Dejar en blanco si la fecha de recogida no se conoce aún.',
+        verbose_name=_('Fecha de fin (recogida)'),
+        help_text=_('Dejar en blanco si la fecha de recogida no se conoce aún.'),
     )
     cleaning_frequency = models.PositiveIntegerField(
-        verbose_name='Limpiezas por semana',
+        verbose_name=_('Limpiezas por semana'),
         validators=[MinValueValidator(1), MaxValueValidator(7)],
-        help_text='Numero de servicios de limpieza semanales (1 a 7).',
+        help_text=_('Numero de servicios de limpieza semanales (1 a 7).'),
     )
     cleaning_weekdays = models.JSONField(
         default=list,
         blank=True,
-        verbose_name='Dias de limpieza',
-        help_text='Selecciona de lunes a domingo. Deben coincidir con limpiezas por semana.',
+        verbose_name=_('Dias de limpieza'),
+        help_text=_('Selecciona de lunes a domingo. Deben coincidir con limpiezas por semana.'),
     )
     access_start_time = models.TimeField(
         null=True, blank=True,
-        verbose_name='Hora de acceso (inicio)',
-        help_text='Hora a partir de la cual se puede acceder al sitio.',
+        verbose_name=_('Hora de acceso (inicio)'),
+        help_text=_('Hora a partir de la cual se puede acceder al sitio.'),
     )
     access_end_time = models.TimeField(
         null=True, blank=True,
-        verbose_name='Hora de acceso (fin)',
-        help_text='Última hora permitida de acceso al sitio.',
+        verbose_name=_('Hora de acceso (fin)'),
+        help_text=_('Última hora permitida de acceso al sitio.'),
     )
     status = models.CharField(
         max_length=15,
         choices=Status.choices,
         default=Status.ACTIVE,
-        verbose_name='Estado',
+        verbose_name=_('Estado'),
     )
 
     class Meta:
-        verbose_name        = 'Pedido'
-        verbose_name_plural = 'Pedidos'
+        verbose_name        = _('Pedido')
+        verbose_name_plural = _('Pedidos')
         ordering            = ['-start_date']
 
     def __str__(self) -> str:
@@ -597,35 +598,35 @@ class Contract(models.Model):
 class Route(models.Model):
     """Ruta de un día: agrupa mantenimientos asignados a un conductor y vehículo."""
 
-    date    = models.DateField(verbose_name='Fecha')
+    date    = models.DateField(verbose_name=_('Fecha'))
     module  = models.CharField(
         max_length=10,
         choices=Contract.Module.choices,
         default=Contract.Module.OBRA,
-        verbose_name='Módulo',
+        verbose_name=_('Módulo'),
     )
     driver  = models.ForeignKey(
         Driver, on_delete=models.SET_NULL,
         null=True, blank=True,
-        related_name='routes', verbose_name='Conductor',
+        related_name='routes', verbose_name=_('Conductor'),
     )
     vehicle = models.ForeignKey(
         Vehicle, on_delete=models.SET_NULL,
         null=True, blank=True,
-        related_name='routes', verbose_name='Vehículo',
+        related_name='routes', verbose_name=_('Vehículo'),
     )
     name = models.CharField(
         max_length=100, blank=True, default='',
-        verbose_name='Nombre / alias',
-        help_text='Opcional. Ej: Ruta Norte, Ruta Sur.',
+        verbose_name=_('Nombre / alias'),
+        help_text=_('Opcional. Ej: Ruta Norte, Ruta Sur.'),
     )
     is_cancelled = models.BooleanField(
-        default=False, verbose_name='Cancelada',
+        default=False, verbose_name=_('Cancelada'),
     )
 
     class Meta:
-        verbose_name        = 'Ruta'
-        verbose_name_plural = 'Rutas'
+        verbose_name        = _('Ruta')
+        verbose_name_plural = _('Rutas')
         ordering            = ['-date', 'driver__name']
 
     def __str__(self) -> str:
@@ -650,45 +651,45 @@ class ServiceTask(models.Model):  # forward declaration — RouteStop is defined
     """
 
     class TaskType(models.TextChoices):
-        ENTREGA  = 'ENTREGA',  'Entrega'
-        LIMPIEZA = 'LIMPIEZA', 'Limpieza'
-        RECOGIDA = 'RECOGIDA', 'Recogida'
+        ENTREGA  = 'ENTREGA',  _('Entrega')
+        LIMPIEZA = 'LIMPIEZA', _('Limpieza')
+        RECOGIDA = 'RECOGIDA', _('Recogida')
 
     task_type      = models.CharField(
-        max_length=10, choices=TaskType.choices, verbose_name='Tipo de tarea'
+        max_length=10, choices=TaskType.choices, verbose_name=_('Tipo de tarea')
     )
-    scheduled_date = models.DateField(verbose_name='Fecha programada')
+    scheduled_date = models.DateField(verbose_name=_('Fecha programada'))
     driver         = models.ForeignKey(
         Driver, on_delete=models.PROTECT,
         null=True, blank=True,
-        related_name='tasks', verbose_name='Conductor',
+        related_name='tasks', verbose_name=_('Conductor'),
     )
     vehicle        = models.ForeignKey(
         Vehicle, on_delete=models.PROTECT,
         null=True, blank=True,
-        related_name='tasks', verbose_name='Vehículo',
+        related_name='tasks', verbose_name=_('Vehículo'),
     )
     location       = models.ForeignKey(
         Location, on_delete=models.PROTECT,
-        related_name='tasks', verbose_name='Ubicación',
+        related_name='tasks', verbose_name=_('Ubicación'),
     )
     contract       = models.ForeignKey(
         Contract, on_delete=models.CASCADE,
-        related_name='tasks', verbose_name='Contrato',
+        related_name='tasks', verbose_name=_('Contrato'),
     )
     suggested_vehicle_size = models.IntegerField(
         choices=Vehicle.Size.choices,
         null=True, blank=True,
-        verbose_name='Tamaño sugerido',
-        help_text='Calculado automáticamente según tipo de tarea y ubicación.',
+        verbose_name=_('Tamaño sugerido'),
+        help_text=_('Calculado automáticamente según tipo de tarea y ubicación.'),
     )
     is_cancelled = models.BooleanField(
-        default=False, verbose_name='Cancelado',
+        default=False, verbose_name=_('Cancelado'),
     )
 
     class Meta:
-        verbose_name        = 'Mantenimiento'
-        verbose_name_plural = 'Mantenimientos'
+        verbose_name        = _('Mantenimiento')
+        verbose_name_plural = _('Mantenimientos')
         ordering            = ['scheduled_date', 'task_type']
 
     def __str__(self) -> str:
@@ -792,21 +793,21 @@ class RouteStop(models.Model):
 
     route = models.ForeignKey(
         Route, on_delete=models.CASCADE,
-        related_name='stops', verbose_name='Ruta',
+        related_name='stops', verbose_name=_('Ruta'),
     )
     task = models.ForeignKey(
         ServiceTask, on_delete=models.CASCADE,
-        related_name='route_stops', verbose_name='Mantenimiento',
+        related_name='route_stops', verbose_name=_('Mantenimiento'),
     )
     order = models.PositiveIntegerField(
         default=0,
-        verbose_name='Orden',
-        help_text='Posición en la ruta (1 = primera parada).',
+        verbose_name=_('Orden'),
+        help_text=_('Posición en la ruta (1 = primera parada).'),
     )
 
     class Meta:
-        verbose_name        = 'Mantenimiento de la ruta'
-        verbose_name_plural = 'Mantenimientos de la ruta'
+        verbose_name        = _('Mantenimiento de la ruta')
+        verbose_name_plural = _('Mantenimientos de la ruta')
         ordering            = ['order', 'pk']
         constraints         = [
             models.UniqueConstraint(fields=['task'], name='routestop_task_unique'),

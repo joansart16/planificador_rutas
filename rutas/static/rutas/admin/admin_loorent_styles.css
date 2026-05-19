@@ -170,7 +170,30 @@
 
 
 /* ══════════════════════════════════════════════════════════════════
-   4. EXTRA FILTER BAR  (unmatched filters above the table)
+   4. SEARCH BUTTON
+   Django's #toolbar sits outside the normal button flow; the submit
+   input inside it sometimes gets a transparent/white background from
+   browser defaults overriding the CSS variable. Force it here.
+   ══════════════════════════════════════════════════════════════════ */
+
+#toolbar #searchbar + input[type=submit],
+#changelist-search input[type=submit],
+#toolbar input[type=submit] {
+    background-color: #0F6B43 !important;
+    color:            #ffffff !important;
+    border-color:     #0a4f31 !important;
+    padding:          4px 12px !important;
+    border-radius:    4px !important;
+    font-size:        .82rem !important;
+    cursor:           pointer !important;
+}
+#toolbar input[type=submit]:hover {
+    background-color: #0a4f31 !important;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   5. EXTRA FILTER BAR  (unmatched filters above the table)
    ══════════════════════════════════════════════════════════════════ */
 
 #extra-flt-bar {

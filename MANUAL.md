@@ -341,10 +341,29 @@ rutas/models.py → diccionari _TOWN_ZONE_MAP (municipis)
 rutas/static/rutas/admin/location_geocode.js → objectes POSTAL_ZONE / TOWN_ZONE
 ```
 
-### Canviar traduccions (ES / CA)
-1. Editar `locale/es/LC_MESSAGES/django.po` i/o `locale/ca/`
-2. `python compile_mo.py`
-3. Push
+### Canviar traduccions i correccions gramaticals (ES / CA)
+
+El sistema usa un sol fitxer de traducció per al català. El castellà és l'idioma base (els strings del codi).
+
+**On modificar:**
+
+| Tipus de text | On canviar |
+|---------------|-----------|
+| Noms de camps del formulari (ex: "Nom del lloc") | `rutas/models.py` → `verbose_name=_('...')` del camp corresponent |
+| Noms de models al menú (ex: "Conductors") | `rutas/models.py` → `verbose_name` / `verbose_name_plural` a `class Meta` |
+| Valors dels desplegables (ex: "Disponible", "Retirat") | `rutas/models.py` → etiquetes dels `TextChoices` / `IntegerChoices` |
+| Botons dels llistats (ex: "Carregar Excel") | `locale/ca/LC_MESSAGES/django.po` → `msgstr` de l'entrada corresponent |
+| Columnes del llistat (ex: "Dies de treball") | `rutas/admin.py` → `description=` del `@admin.display` corresponent |
+| Texto a plantilles custom | `rutas/templates/admin/rutas/*/change_list.html` → `{% trans "..." %}` |
+| **Qualsevol traducció CA** | `locale/ca/LC_MESSAGES/django.po` → busca el `msgid` i edita el `msgstr` |
+
+**Passos per aplicar canvis de traducció:**
+1. Edita `locale/ca/LC_MESSAGES/django.po` (busca el `msgid` i canvia el `msgstr`)
+2. Executa `python compile_mo.py`
+3. Reinicia el servidor (en local `Ctrl+C` i torna a executar `runserver`)
+4. Push per desplegar a staging/producció
+
+**Nota important:** Si afegeixes un string nou al codi Python (en un `verbose_name`, `description`, etc.), has d'afegir l'entrada corresponent al `.po` manualment i recompilar. El castellà NO necessita fitxer `.po` — és l'idioma base.
 
 ---
 
