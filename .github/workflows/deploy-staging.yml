@@ -30,15 +30,13 @@ jobs:
             git pull origin master
 
             echo "──── rebuild & restart web ────"
-            # Reconstruye solo el servicio web (sin tocar db/nginx/certbot)
-            # y lo reemplaza sin downtime prolongado.
-            docker compose -f docker-compose.staging.yml up -d --build web
+            docker compose --env-file .env.staging -f docker-compose.staging.yml up -d --build web
 
             echo "──── asegurar el resto de servicios arriba ────"
-            docker compose -f docker-compose.staging.yml up -d
+            docker compose --env-file .env.staging -f docker-compose.staging.yml up -d
 
             echo "──── limpiar imágenes antiguas ────"
             docker image prune -f
 
             echo "──── estado final ────"
-            docker compose -f docker-compose.staging.yml ps
+            docker compose --env-file .env.staging -f docker-compose.staging.yml ps

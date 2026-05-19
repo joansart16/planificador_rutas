@@ -53,7 +53,7 @@ echo "━━━ Parando nginx temporal ━━━"
 docker stop nginx_acme_bootstrap || true
 
 echo "━━━ [4/4] Levantando el stack completo ━━━"
-docker compose -f "${COMPOSE_FILE}" up -d
+docker compose --env-file .env.staging -f "${COMPOSE_FILE}" up -d
 
 echo ""
 echo "✅  Listo. Accede a: https://${DOMAIN}"
