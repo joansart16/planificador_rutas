@@ -54,10 +54,11 @@ console.log("🚀 JS de Filtros de Loorent cargado correctamente");
       if (lis.length < 2) return;
 
       // "All" reset link — first <li>
-      var allA    = lis[0].querySelector('a');
-      var allHref = allA ? (allA.getAttribute('href') || '?') : '?';
-      var allQs   = allHref.includes('?') ? allHref.slice(allHref.indexOf('?') + 1) : '';
-      var allP    = new URLSearchParams(allQs);
+      var allA     = lis[0].querySelector('a');
+      var allHref  = allA ? (allA.getAttribute('href') || '?') : '?';
+      var allQs    = allHref.includes('?') ? allHref.slice(allHref.indexOf('?') + 1) : '';
+      var allP     = new URLSearchParams(allQs);
+      var allLabel = allA ? allA.textContent.trim() : 'Tots';
 
       // First specific option reveals the URL param name
       var specA = null;
@@ -83,7 +84,7 @@ console.log("🚀 JS de Filtros de Loorent cargado correctamente");
       if (!paramName) return;
 
       // Full sidebar option list (label + navigation value / PK)
-      var items = [{ label: '— Todos —', value: '' }];
+      var items = [{ label: '— ' + allLabel + ' —', value: '' }];
       for (var j = 1; j < lis.length; j++) {
         var a = lis[j].querySelector('a');
         if (!a) continue;
@@ -95,7 +96,7 @@ console.log("🚀 JS de Filtros de Loorent cargado correctamente");
       }
 
       console.log('[Filtros] Grupo:', title, '→', paramName, '(' + (items.length - 1) + ' opciones)');
-      groups.push({ title: title, paramName: paramName, items: items });
+      groups.push({ title: title, paramName: paramName, items: items, allLabel: allLabel });
     });
 
     return groups;
@@ -196,9 +197,9 @@ console.log("🚀 JS de Filtros de Loorent cargado correctamente");
       if (itemLow.length > 2 && cellLow.includes(itemLow))  return item; // cell contains sidebar
     }
 
-    // Boolean fallback: Django renders "Sí"/"No" but cell shows "Activo"/"Cancelado"
+    // Boolean fallback: Django renders "Sí"/"No" but cell shows "Activo"/"Actiu"/"Cancelado"
     if (paramName && paramName.indexOf('cancel') !== -1) {
-      if (cellLow.indexOf('activ') !== -1) {
+      if (cellLow.indexOf('acti') !== -1) {
         for (var j = 0; j < sidebarItems.length; j++) {
           if (sidebarItems[j].value === '0') return sidebarItems[j];
         }
@@ -243,7 +244,7 @@ console.log("🚀 JS de Filtros de Loorent cargado correctamente");
     if (!orderedTexts.length) return group.items;
 
     var cur        = curParams.get(group.paramName) || '';
-    var newItems   = [{ label: '— Todos —', value: '' }];
+    var newItems   = [{ label: '— ' + (group.allLabel || 'Tots') + ' —', value: '' }];
     var usedValues = {};
 
     orderedTexts.forEach(function (cellText) {

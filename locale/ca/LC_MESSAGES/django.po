@@ -51,6 +51,21 @@ msgstr "Nom"
 msgid "Días de trabajo"
 msgstr "Dies de treball"
 
+msgid "Disponibilidad"
+msgstr "Disponibilitat"
+
+msgid "Disponibilidad mañana"
+msgstr "Disponibilitat demà"
+
+msgid "Disponible mañana"
+msgstr "Disponible demà"
+
+msgid "No disponible mañana"
+msgstr "No disponible demà"
+
+msgid "No laboral mañana"
+msgstr "No laboral demà"
+
 # ── DriverUnavailability ────────────────────────────────────────────────────
 
 msgid "Indisponibilidad del conductor"
@@ -273,6 +288,18 @@ msgstr "Nom / àlies"
 
 msgid "Cancelada"
 msgstr "Cancel·lada"
+
+msgid "Activa"
+msgstr "Activa"
+
+msgid "Paradas"
+msgstr "Parades"
+
+msgid "Ver mapa"
+msgstr "Veure mapa"
+
+msgid "Mapa"
+msgstr "Mapa"
 
 # ── ServiceTask ─────────────────────────────────────────────────────────────
 

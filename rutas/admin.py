@@ -577,14 +577,14 @@ class LocationAdminForm(forms.ModelForm):
 
 
 class DriverAvailabilityFilter(admin.SimpleListFilter):
-    title = 'Disponibilidad'
+    title = _('Disponibilidad')
     parameter_name = 'availability'
 
     def lookups(self, request, model_admin):
         return [
-            ('available', 'Disponible mañana'),
-            ('unavailable', 'No disponible mañana'),
-            ('non_working', 'No laboral mañana'),
+            ('available',   _('Disponible mañana')),
+            ('unavailable', _('No disponible mañana')),
+            ('non_working', _('No laboral mañana')),
         ]
 
     def queryset(self, request, queryset):
@@ -690,7 +690,7 @@ class DriverAdmin(ExcelImportExportMixin, admin.ModelAdmin):
         }),
     )
 
-    @admin.display(description='Días de trabajo')
+    @admin.display(description=_('Días de trabajo'))
     def working_days_badge(self, obj: Driver) -> str:
         if not obj.working_days:
             return '—'
@@ -698,7 +698,7 @@ class DriverAdmin(ExcelImportExportMixin, admin.ModelAdmin):
         selected = [day_names.get(int(day), str(day)) for day in obj.working_days]
         return ', '.join(selected)
 
-    @admin.display(description='Disponibilidad mañana')
+    @admin.display(description=_('Disponibilidad mañana'))
     def current_availability_badge(self, obj: Driver) -> str:
         from datetime import timedelta
 
@@ -752,7 +752,7 @@ class VehicleAdmin(ExcelImportExportMixin, admin.ModelAdmin):
     ordering      = ('license_plate',)
     actions       = ['delete_selected']
 
-    @admin.display(description='Tamaño', ordering='size')
+    @admin.display(description=_('Tamaño'), ordering='size')
     def get_size_display_label(self, obj: Vehicle) -> str:
         return obj.get_size_display()
 
@@ -1202,16 +1202,19 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
             ),
         )
 
-    @admin.display(description='Estado')
+    @admin.display(description=_('Estado'))
     def display_estado(self, obj: Contract) -> str:
-        badges = {
-            Contract.Status.ACTIVE:      ('🟢 Activo',       '#0F6B43'),
-            Contract.Status.INTERRUPTED: ('🟡 Interrumpido', '#F59E0B'),
-            Contract.Status.RETIRED:     ('⚫ Retirado',      '#6B7280'),
-            Contract.Status.CANCELLED:   ('🔴 Cancelado',    '#DC2626'),
+        icons = {
+            Contract.Status.ACTIVE:      ('🟢', '#0F6B43'),
+            Contract.Status.INTERRUPTED: ('🟡', '#F59E0B'),
+            Contract.Status.RETIRED:     ('⚫', '#6B7280'),
+            Contract.Status.CANCELLED:   ('🔴', '#DC2626'),
         }
-        text, color = badges.get(obj.status, (obj.get_status_display(), '#374151'))
-        return format_html('<span style="color:{};font-weight:600">{}</span>', color, text)
+        icon, color = icons.get(obj.status, ('', '#374151'))
+        return format_html(
+            '<span style="color:{};font-weight:600">{} {}</span>',
+            color, icon, obj.get_status_display(),
+        )
 
     @admin.display(description='Coherencia')
     def coherence_warning_badge(self, obj: Contract) -> str:
@@ -1452,11 +1455,17 @@ class RouteAdmin(ModuleFilterMixin, admin.ModelAdmin):
     )
     change_list_template = 'admin/rutas/route/change_list.html'
 
-    @admin.display(description='Estado')
+    @admin.display(description=_('Estado'))
     def display_estado(self, obj: Route) -> str:
         if obj.is_cancelled:
-            return format_html('<span style="color:#DC2626;font-weight:600">{}</span>', '🔴 Cancelada')
-        return format_html('<span style="color:#0F6B43;font-weight:600">{}</span>', '🟢 Activa')
+            return format_html(
+                '<span style="color:#DC2626;font-weight:600">🔴 {}</span>',
+                _('Cancelada'),
+            )
+        return format_html(
+            '<span style="color:#0F6B43;font-weight:600">🟢 {}</span>',
+            _('Activa'),
+        )
 
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser
@@ -1676,14 +1685,14 @@ class RouteAdmin(ModuleFilterMixin, admin.ModelAdmin):
         extra_context['tomorrow_iso'] = tomorrow_iso
         return super().changelist_view(request, extra_context=extra_context)
 
-    @admin.display(description='Paradas', ordering='stop_count')
+    @admin.display(description=_('Paradas'), ordering='stop_count')
     def stop_count(self, obj: Route) -> int:
         return obj.stop_count
 
-    @admin.display(description='Mapa')
+    @admin.display(description=_('Mapa'))
     def map_link(self, obj: Route) -> str:
         url = reverse('admin:rutas_route_mapa', args=[obj.pk])
-        return format_html('<a href="{}" target="_blank">🗺️ Ver mapa</a>', url)
+        return format_html('<a href="{}" target="_blank">🗺️ {}</a>', url, _('Ver mapa'))
 
     def get_queryset(self, request):
         return super().get_queryset(request).annotate(stop_count=Count('stops'))
@@ -2189,33 +2198,33 @@ class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
             },
         )
 
-    @admin.display(description='Empresa', ordering='location__company__name')
+    @admin.display(description=_('Empresa'), ordering='location__company__name')
     def location_company(self, obj: ServiceTask) -> str:
         if obj.location_id and obj.location.company_id:
             return obj.location.company.name
         return '—'
 
-    @admin.display(description='Ubicación', ordering='location__name')
+    @admin.display(description=_('Nombre del sitio'), ordering='location__name')
     def location_name(self, obj: ServiceTask) -> str:
         return obj.location.name if obj.location_id else '—'
 
-    @admin.display(description='Pueblo', ordering='location__town')
+    @admin.display(description=_('Pueblo'), ordering='location__town')
     def location_town(self, obj: ServiceTask) -> str:
         return obj.location.town if obj.location_id and obj.location.town else '—'
 
-    @admin.display(description='Nº presupuesto', ordering='contract__budget_number')
+    @admin.display(description=_('Nº presupuesto'), ordering='contract__budget_number')
     def budget_number_display(self, obj: ServiceTask) -> str:
         if obj.contract_id and obj.contract.budget_number:
             return obj.contract.budget_number
         return '—'
 
-    @admin.display(description='Tam. sugerido', ordering='suggested_vehicle_size')
+    @admin.display(description=_('Tamaño sugerido'), ordering='suggested_vehicle_size')
     def suggested_size_badge(self, obj: ServiceTask) -> str:
         if obj.suggested_vehicle_size is None:
             return '—'
         return obj.get_suggested_vehicle_size_display()
 
-    @admin.display(description='Ruta')
+    @admin.display(description=_('Ruta'))
     def route_badge(self, obj: ServiceTask) -> str:
         stop = obj.route_stops.select_related('route').first()
         if not stop:
@@ -2228,11 +2237,17 @@ class ServiceTaskAdmin(ModuleFilterMixin, admin.ModelAdmin):
             stop.order,
         )
 
-    @admin.display(description='Estado')
+    @admin.display(description=_('Estado'))
     def display_estado(self, obj: ServiceTask) -> str:
         if obj.is_cancelled:
-            return format_html('<span style="color:#DC2626;font-weight:600">{}</span>', '🔴 Cancelado')
-        return format_html('<span style="color:#0F6B43;font-weight:600">{}</span>', '🟢 Activo')
+            return format_html(
+                '<span style="color:#DC2626;font-weight:600">🔴 {}</span>',
+                _('Cancelado'),
+            )
+        return format_html(
+            '<span style="color:#0F6B43;font-weight:600">🟢 {}</span>',
+            _('Activo'),
+        )
 
     # ------------------------------------------------------------------
     # Admin Action · Reasignación masiva de conductor
