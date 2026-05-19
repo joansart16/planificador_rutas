@@ -7,19 +7,50 @@ on:
       - main
       - develop
 
+# Evitar loops: no ejecutar si el commit es el propio bump de versión
 jobs:
   deploy:
-    name: SSH → EC2 (web_staging)
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    name: Bump version + SSH → EC2 (web_staging)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Bump versión patch
+        id: ver
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+          echo "$NEW_VERSION" > VERSION
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Versión: $VERSION → $NEW_VERSION"
+
+      - name: Commit VERSION + crear tag
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          git commit -m "v${{ steps.ver.outputs.new_version }} [skip ci]"
+          git tag "v${{ steps.ver.outputs.new_version }}"
+          git push origin master
+          git push origin "v${{ steps.ver.outputs.new_version }}"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host:     ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key:      ${{ secrets.SSH_KEY }}
-          connect_timeout: 30s
           script: |
             set -e
 
