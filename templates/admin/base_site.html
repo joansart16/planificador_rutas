@@ -1,4 +1,5 @@
 {% extends "admin/base.html" %}
+{% load loorent_tags %}
 
 {% block title %}{{ title }} · Loorent{% endblock %}
 
@@ -7,6 +8,10 @@
   <a href="/" style="color:#fff;text-decoration:none;font-size:1.05rem;font-weight:700;letter-spacing:.02em;">
     Loorent · Planificador
   </a>
+  <span style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);
+               border-radius:5px;padding:.15rem .5rem;font-size:.72rem;font-weight:600;letter-spacing:.03em;">
+    v{% app_version %}
+  </span>
   {% with module=request.session.current_module %}
   {% if module %}
   <a href="/"

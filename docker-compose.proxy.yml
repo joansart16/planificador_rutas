@@ -1,0 +1,38 @@
+services:
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.proxy.conf:/etc/nginx/conf.d/default.conf:ro
+      - proxy_certbot_webroot:/var/www/certbot:ro
+      - proxy_certbot_certs:/etc/letsencrypt:ro
+    networks:
+      - proxy_network
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - proxy_certbot_webroot:/var/www/certbot
+      - proxy_certbot_certs:/etc/letsencrypt
+    entrypoint: >
+      /bin/sh -c "
+        trap exit TERM;
+        while :; do
+          certbot renew --quiet;
+          sleep 12h & wait $${!};
+        done"
+    restart: unless-stopped
+
+volumes:
+  proxy_certbot_webroot:
+    name: proxy_certbot_webroot
+  proxy_certbot_certs:
+    name: proxy_certbot_certs
+
+networks:
+  proxy_network:
+    name: proxy_network

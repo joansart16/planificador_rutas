@@ -1,7 +1,6 @@
 name: Deploy · Production
 
 on:
-  # Disparo manual desde GitHub: Actions → Deploy · Production → Run workflow
   workflow_dispatch:
     inputs:
       version:
@@ -9,7 +8,6 @@ on:
         required: true
         type: string
 
-  # También se dispara automáticamente al publicar un Release en GitHub
   release:
     types: [published]
 
@@ -38,11 +36,14 @@ jobs:
           script: |
             set -e
 
-            cd /srv/planificador_rutas
+            cd /srv/planificador_rutas_prod
 
             echo "──── git fetch + checkout ${{ steps.ver.outputs.version }} ────"
             git fetch --tags origin
             git checkout ${{ steps.ver.outputs.version }}
+
+            echo "──── asegurar red proxy ────"
+            docker network create proxy_network 2>/dev/null || true
 
             echo "──── rebuild & restart web ────"
             docker compose --env-file .env.production -f docker-compose.production.yml up -d --build web
