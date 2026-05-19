@@ -19,15 +19,8 @@ def _user_modules(user):
     return [Contract.Module.OBRA]
 
 
-@login_required
 def home(request):
-    modules = _user_modules(request.user)
-    current = request.session.get('current_module', Contract.Module.OBRA)
-    return render(request, 'home.html', {
-        'modules': modules,
-        'current_module': current,
-        'Module': Contract.Module,
-    })
+    return redirect('/admin/')
 
 
 @login_required

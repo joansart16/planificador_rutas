@@ -491,7 +491,7 @@ class ContractWithLocationForm(forms.ModelForm):
         help_text='Obra o Evento.',
     )
     cleaning_weekdays = forms.TypedMultipleChoiceField(
-        label='Días de limpieza (lunes a domingo)',
+        label=_('Dias de limpieza'),
         choices=Contract.Weekday.choices,
         coerce=int,
         widget=forms.CheckboxSelectMultiple,
@@ -1227,7 +1227,7 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
             edit_url,
         )
 
-    @admin.display(description='Dias limpieza')
+    @admin.display(description=_('Dias de limpieza'))
     def cleaning_days_badge(self, obj: Contract) -> str:
         day_names = {k: str(v) for k, v in Contract.Weekday.choices}
         selected = [day_names.get(int(day), str(day)) for day in (obj.cleaning_weekdays or [])]
