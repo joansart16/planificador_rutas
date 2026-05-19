@@ -1,6 +1,7 @@
 name: Deploy · Production
 
 on:
+  # ── Botón manual en GitHub → Actions → "Deploy · Production" → "Run workflow"
   workflow_dispatch:
     inputs:
       version:
@@ -8,12 +9,13 @@ on:
         required: true
         type: string
 
+  # ── También se dispara al publicar un Release en GitHub
   release:
     types: [published]
 
 jobs:
   deploy:
-    name: SSH → EC2 Production
+    name: SSH → EC2 (web_production)
     runs-on: ubuntu-latest
 
     steps:
@@ -29,33 +31,31 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host:     ${{ secrets.PROD_SSH_HOST }}
-          username: ${{ secrets.PROD_SSH_USERNAME }}
-          key:      ${{ secrets.PROD_SSH_KEY }}
+          host:     ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key:      ${{ secrets.SSH_KEY }}
           connect_timeout: 30s
           script: |
             set -e
+            VERSION="${{ steps.ver.outputs.version }}"
 
+            echo "──── Actualizando código de producción a ${VERSION} ────"
             cd /srv/planificador_rutas_prod
-
-            echo "──── git fetch + checkout ${{ steps.ver.outputs.version }} ────"
             git fetch --tags origin
-            git checkout ${{ steps.ver.outputs.version }}
+            git checkout "${VERSION}"
 
-            echo "──── asegurar red proxy ────"
-            docker network create proxy_network 2>/dev/null || true
+            echo "──── Actualizando archivos de infraestructura (master) ────"
+            cd /srv/planificador_rutas
+            git pull origin master
 
-            echo "──── rebuild & restart web ────"
-            docker compose --env-file .env.production -f docker-compose.production.yml up -d --build web
+            echo "──── Rebuild producción ────"
+            docker compose --env-file .env.server -f docker-compose.server.yml up -d --build web_production
 
-            echo "──── asegurar el resto de servicios arriba ────"
-            docker compose --env-file .env.production -f docker-compose.production.yml up -d
-
-            echo "──── limpiar imágenes antiguas ────"
+            echo "──── Limpiar imágenes antiguas ────"
             docker image prune -f
 
-            echo "──── estado final ────"
-            docker compose --env-file .env.production -f docker-compose.production.yml ps
+            echo "──── Estado final ────"
+            docker compose --env-file .env.server -f docker-compose.server.yml ps
 
-            echo "──── versión desplegada ────"
-            cat VERSION
+            echo "──── Versión desplegada ────"
+            cat /srv/planificador_rutas_prod/VERSION

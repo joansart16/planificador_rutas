@@ -9,7 +9,7 @@ on:
 
 jobs:
   deploy:
-    name: SSH → EC2 Staging
+    name: SSH → EC2 (web_staging)
     runs-on: ubuntu-latest
 
     steps:
@@ -28,17 +28,11 @@ jobs:
             echo "──── git pull ────"
             git pull origin master
 
-            echo "──── asegurar red proxy ────"
-            docker network create proxy_network 2>/dev/null || true
-
-            echo "──── rebuild & restart web ────"
-            docker compose --env-file .env.staging -f docker-compose.staging.yml up -d --build web
-
-            echo "──── asegurar el resto de servicios arriba ────"
-            docker compose --env-file .env.staging -f docker-compose.staging.yml up -d
+            echo "──── rebuild staging ────"
+            docker compose --env-file .env.server -f docker-compose.server.yml up -d --build web_staging
 
             echo "──── limpiar imágenes antiguas ────"
             docker image prune -f
 
             echo "──── estado final ────"
-            docker compose --env-file .env.staging -f docker-compose.staging.yml ps
+            docker compose --env-file .env.server -f docker-compose.server.yml ps
