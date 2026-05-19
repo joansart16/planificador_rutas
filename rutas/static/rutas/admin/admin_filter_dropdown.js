@@ -125,10 +125,11 @@ console.log("🚀 JS de Filtros de Loorent cargado correctamente");
 
   // Keyword fallback when both class-based and text-based lookups fail.
   var KEYWORD_MAP = [
-    { words: ['cancelado', 'estado'],  cls: 'display_estado'   },
-    { words: ['empresa', 'cliente'],   cls: 'location_company' },
-    { words: ['ubicaci'],              cls: 'location_name'    },
-    { words: ['pueblo', 'poble'],      cls: 'location_town'    },
+    { words: ['presupuesto', 'pressupost'], cls: 'budget_number'   },
+    { words: ['cancelado', 'estado'],       cls: 'display_estado'   },
+    { words: ['empresa', 'cliente'],        cls: 'location_company' },
+    { words: ['ubicaci'],                   cls: 'location_name'    },
+    { words: ['pueblo', 'poble'],           cls: 'location_town'    },
   ];
 
   function findTh(group, ths) {

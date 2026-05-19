@@ -13,6 +13,7 @@ from django.utils.html import format_html
 from django.urls import path, reverse
 from django.utils.safestring import mark_safe
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -108,7 +109,7 @@ def _parse_choice(value, choices, default=None):
     if value is None or _as_text(value) == '':
         return default
     normalized = _as_text(value)
-    by_key = {str(key): key for key, _ in choices}
+    by_key = {str(key): key for key, _label in choices}
     by_label = {str(label).lower(): key for key, label in choices}
     if normalized in by_key:
         return by_key[normalized]
@@ -960,6 +961,51 @@ class ServiceTaskInline(admin.TabularInline):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Filtros reutilizables por pueblo y presupuesto (Contract + ServiceTask)
+# ──────────────────────────────────────────────────────────────────────────────
+class TownFilter(admin.SimpleListFilter):
+    title          = _('Pueblo')
+    parameter_name = 'location_town'
+
+    def lookups(self, request, model_admin):
+        qs = model_admin.get_queryset(request)
+        towns = (
+            qs.exclude(location__town='')
+              .exclude(location__town__isnull=True)
+              .values_list('location__town', flat=True)
+              .distinct()
+              .order_by('location__town')
+        )
+        return [(t, t) for t in towns]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(location__town=self.value())
+        return queryset
+
+
+class ContractBudgetFilter(admin.SimpleListFilter):
+    title          = _('Nº presupuesto')
+    parameter_name = 'budget_number'
+
+    def lookups(self, request, model_admin):
+        qs = model_admin.get_queryset(request)
+        budgets = (
+            qs.exclude(budget_number='')
+              .exclude(budget_number__isnull=True)
+              .values_list('budget_number', flat=True)
+              .distinct()
+              .order_by('budget_number')
+        )
+        return [(b, b) for b in budgets]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(budget_number=self.value())
+        return queryset
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Contract
 # ──────────────────────────────────────────────────────────────────────────────
 @admin.register(Contract)
@@ -996,14 +1042,33 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
     form = ContractWithLocationForm
     change_list_template = 'admin/rutas/contract/change_list.html'
     list_display   = (
-        'budget_number', '__str__', 'location', 'start_date', 'end_date',
-        'cleaning_frequency', 'cleaning_days_badge', 'coherence_warning_badge', 'display_estado',
+        'budget_number',
+        'location_company',
+        'location_name',
+        'location_town',
+        'start_date', 'end_date',
+        'cleaning_days_badge',
+        'display_estado',
     )
-    list_filter    = ('status', 'location__zone', 'location__company', 'start_date')
+    list_filter    = (ContractBudgetFilter, 'location__company', 'location', TownFilter, 'status', 'location__zone')
     search_fields  = ('location__name', 'location__company__name', 'location__town', 'budget_number')
     date_hierarchy = 'start_date'
+    list_select_related = ('location__company',)
     inlines        = [ServiceTaskInline]
     actions        = ['delete_selected']
+
+    class Media:
+        css = {
+            'all': (
+                'https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css',
+                'rutas/admin/admin_loorent_styles.css',
+            )
+        }
+        js = (
+            'https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js',
+            'rutas/admin/admin_filter_dropdown.js',
+            'rutas/admin/contract_dates_tomorrow.js',
+        )
 
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser
@@ -1048,9 +1113,6 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
             'fields': ('status',),
         }),
     )
-
-    class Media:
-        js = ('rutas/admin/contract_dates_tomorrow.js',)
 
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         extra_context = extra_context or {}
@@ -1167,6 +1229,20 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
         day_names = {k: str(v) for k, v in Contract.Weekday.choices}
         selected = [day_names.get(int(day), str(day)) for day in (obj.cleaning_weekdays or [])]
         return ', '.join(selected) if selected else '—'
+
+    @admin.display(description=_('Empresa'), ordering='location__company__name')
+    def location_company(self, obj: Contract) -> str:
+        if obj.location_id and obj.location.company_id:
+            return obj.location.company.name
+        return '—'
+
+    @admin.display(description=_('Nombre del sitio'), ordering='location__name')
+    def location_name(self, obj: Contract) -> str:
+        return obj.location.name if obj.location_id else '—'
+
+    @admin.display(description=_('Pueblo'), ordering='location__town')
+    def location_town(self, obj: Contract) -> str:
+        return obj.location.town if obj.location_id and obj.location.town else '—'
 
     def delete_model(self, request, obj):
         """Mostrar advertencia de tareas que se van a eliminar en cascada."""
@@ -1952,27 +2028,6 @@ class ReassignDriverForm(forms.Form):
         empty_label='--- Selecciona un conductor ---',
         help_text='La disponibilidad real se valida dinámicamente por fecha de tarea.',
     )
-
-
-class TownFilter(admin.SimpleListFilter):
-    title          = 'Pueblo'
-    parameter_name = 'location_town'
-
-    def lookups(self, request, model_admin):
-        qs = model_admin.get_queryset(request)
-        towns = (
-            qs.exclude(location__town='')
-              .exclude(location__town__isnull=True)
-              .values_list('location__town', flat=True)
-              .distinct()
-              .order_by('location__town')
-        )
-        return [(t, t) for t in towns]
-
-    def queryset(self, request, queryset):
-        if self.value():
-            return queryset.filter(location__town=self.value())
-        return queryset
 
 
 # ──────────────────────────────────────────────────────────────────────────────

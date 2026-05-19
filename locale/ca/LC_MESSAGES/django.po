@@ -161,6 +161,9 @@ msgstr "Nombre de cabines"
 msgid "Dirección (calle y número)"
 msgstr "Adreça (carrer i número)"
 
+msgid "Pueblo"
+msgstr "Poble"
+
 msgid "Población"
 msgstr "Població"
 
