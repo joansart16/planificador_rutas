@@ -1,5 +1,5 @@
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect, render
+from django.shortcuts import render
 
 from .models import Contract
 
@@ -19,13 +19,11 @@ def _user_modules(user):
     return [Contract.Module.OBRA]
 
 
+@login_required(login_url='/admin/login/')
 def home(request):
-    return redirect('/admin/')
-
-
-@login_required
-def set_module(request, module: str):
-    allowed = _user_modules(request.user)
-    if module in [m.value for m in allowed]:
-        request.session['current_module'] = module
-    return redirect('admin:index')
+    modules = _user_modules(request.user)
+    current_module = request.session.get('current_module', modules[0].value if modules else '')
+    return render(request, 'home.html', {
+        'modules': modules,
+        'current_module': current_module,
+    })

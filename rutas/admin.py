@@ -235,7 +235,8 @@ class ExcelImportExportMixin:
         return extra + urls
 
     def _changelist_url(self):
-        return reverse(f'admin:{self.model._meta.app_label}_{self.model._meta.model_name}_changelist')
+        ns = self.admin_site.name
+        return reverse(f'{ns}:{self.model._meta.app_label}_{self.model._meta.model_name}_changelist')
 
     def download_excel_template_view(self, request):
         workbook = Workbook()
@@ -293,6 +294,8 @@ class ExcelImportExportMixin:
                 return redirect(self._changelist_url())
 
             headers = [_as_text(col) for col in rows[0]]
+            while headers and headers[-1] == '':
+                headers.pop()
             if headers != self.excel_template_columns:
                 self.message_user(
                     request,
@@ -360,7 +363,7 @@ class ExcelImportExportMixin:
                 'opts': self.model._meta,
                 'changelist_url': self._changelist_url(),
                 'template_url': reverse(
-                    f'admin:{self.model._meta.app_label}_{self.model._meta.model_name}_download_excel_template'
+                    f'{self.admin_site.name}:{self.model._meta.app_label}_{self.model._meta.model_name}_download_excel_template'
                 ),
                 'excel_instructions': self.excel_instructions,
                 'excel_template_columns': self.excel_template_columns,

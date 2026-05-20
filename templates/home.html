@@ -148,7 +148,7 @@
 
     <div class="modules">
       {% for mod in modules %}
-        <a href="{% url 'set_module' mod.value %}"
+        <a href="{% if mod.value == 'OBRA' %}/obra/{% else %}/evento/{% endif %}"
            class="module-card {% if current_module == mod.value %}active{% endif %}">
           {% if mod.value == 'OBRA' %}
             <span class="icon">🏗️</span>
