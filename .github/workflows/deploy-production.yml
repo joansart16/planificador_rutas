@@ -56,14 +56,14 @@ jobs:
           host:     ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key:      ${{ secrets.SSH_KEY }}
-          connect_timeout: 30s
+          timeout: 30s
           script: |
             set -e
             VERSION="${{ steps.ver.outputs.version }}"
 
             echo "──── Actualizando código de producción a ${VERSION} ────"
             cd /srv/planificador_rutas_prod
-            git fetch --tags origin
+            git fetch --tags --force origin
             git checkout "${VERSION}"
 
             echo "──── Actualizando archivos de infraestructura (master) ────"
