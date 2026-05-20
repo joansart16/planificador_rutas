@@ -53,13 +53,18 @@ jobs:
           aws-region: eu-south-2
 
       - name: Open SSH port in AWS Security Group
-        uses: sohelamin/aws-security-group-add-ip-action@v1.0.1
-        with:
-          aws-security-group-id: ${{ secrets.AWS_SECURITY_GROUP_ID }}
-          port: 22
-          to-port: 22
-          protocol: tcp
-          description: "GitHub Actions CI/CD Staging"
+        run: |
+          # 1. Obtenim la IP pública actual de la màquina de GitHub Actions
+          PUBLIC_IP=$(curl -s https://ifconfig.me)
+          echo "La IP de GitHub és: $PUBLIC_IP"
+          
+          # 2. Autoritzem el port 22 temporalment només per a aquesta IP
+          aws ec2 authorize-security-group-ingress \
+            --group-id ${{ secrets.AWS_SECURITY_GROUP_ID }} \
+            --protocol tcp \
+            --port 22 \
+            --cidr ${PUBLIC_IP}/32 \
+            --tag-specifications 'ResourceType=security-group-rule,Tags=[{Key=Description,Value="GitHub Actions CI/CD"}]'
       # ─── FI BLOC DE SEGURETAT AWS ───
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -83,3 +88,15 @@ jobs:
 
             echo "──── estado final ────"
             docker compose --env-file .env.server -f docker-compose.server.yml ps
+      - name: Close SSH port in AWS Security Group
+        if: always()
+        run: |
+          # Tornem a demanar la IP per saber quina hem d'esborrar
+          PUBLIC_IP=$(curl -s https://ifconfig.me)
+          
+          # Revoquem l'accés al port 22 per a aquesta IP concreta
+          aws ec2 revoke-security-group-ingress \
+            --group-id ${{ secrets.AWS_SECURITY_GROUP_ID }} \
+            --protocol tcp \
+            --port 22 \
+            --cidr ${PUBLIC_IP}/32
