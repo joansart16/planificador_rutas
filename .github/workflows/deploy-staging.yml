@@ -61,7 +61,7 @@ jobs:
           # 2. Autoritzem el port 22 temporalment només per a aquesta IP
           aws ec2 authorize-security-group-ingress \
             --region eu-south-2 \
-            --group-id ${{ secrets.AWS_SECURITY_GROUP_ID }} \
+            --group-id sg-059ce75e8511a8784 \
             --protocol tcp \
             --port 22 \
             --cidr ${PUBLIC_IP}/32 \
@@ -98,7 +98,7 @@ jobs:
           # Revoquem l'accés al port 22 per a aquesta IP concreta
           aws ec2 revoke-security-group-ingress \
             --region eu-south-2 \
-            --group-id ${{ secrets.AWS_SECURITY_GROUP_ID }} \
+            --group-id sg-059ce75e8511a8784 \
             --protocol tcp \
             --port 22 \
             --cidr ${PUBLIC_IP}/32
