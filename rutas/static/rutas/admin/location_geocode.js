@@ -1,12 +1,14 @@
-﻿/**
- * Geocodificación de ubicaciones — Django Admin
- * API: Google Maps (Places Autocomplete + Geocoding)
+/**
+ * Google Maps — links ràpids i autocomplete de zona
  *
- * Requiere que la página cargue el script de Google Maps con &libraries=places
- * (lo hace el template admin/rutas/location/change_form.html).
+ * Afegeix "↗ Obrir Google Maps" al costat de:
+ *   - id_address       → cerca per text (carrer + població)
+ *   - id_coords_cabin  → obre coordenades exactes
+ *   - id_coords_entrance → obre coordenades exactes
+ *   - id_latitude (DepotConfig) → obre coordenades exactes (combina lat + lng)
  *
- * Al seleccionar un resultado rellena automáticamente:
- *   address, town, postal_code, zone, latitude, longitude + mapa Google.
+ * Si id_address és un <input> (no textarea), activa Google Maps Autocomplete
+ * per omplir automàticament població, codi postal i zona al seleccionar.
  */
 (function () {
   'use strict';
@@ -69,321 +71,239 @@
   };
 
   const POSTAL_ZONE = {
-    // --- PALMA ---
     '07001': 'PALMA', '07002': 'PALMA', '07003': 'PALMA', '07004': 'PALMA', '07005': 'PALMA',
     '07006': 'PALMA', '07007': 'PALMA', '07008': 'PALMA', '07009': 'PALMA', '07010': 'PALMA',
     '07011': 'PALMA', '07012': 'PALMA', '07013': 'PALMA', '07014': 'PALMA', '07015': 'PALMA',
     '07120': 'PALMA', '07198': 'PALMA', '07199': 'PALMA', '07600': 'PALMA', '07610': 'PALMA',
-
-    // --- TRAMUNTANA ---
-    '07110': 'TRAMUNTANA',
-    '07193': 'TRAMUNTANA',
-    '07190': 'TRAMUNTANA',
-    '07140': 'TRAMUNTANA',
-    '07150': 'TRAMUNTANA',
-    '07157': 'TRAMUNTANA',
-    '07160': 'TRAMUNTANA',
-    '07170': 'TRAMUNTANA',
-    '07180': 'TRAMUNTANA',
-    '07181': 'TRAMUNTANA',
-    '07184': 'TRAMUNTANA',
-    '07460': 'TRAMUNTANA',
-    '07470': 'TRAMUNTANA',
-    '07340': 'TRAMUNTANA',
-    '07100': 'TRAMUNTANA',
-
-    // --- RAIGUER ---
-    '07300': 'RAIGUER',
-    '07310': 'RAIGUER',
-    '07320': 'RAIGUER',
-    '07330': 'RAIGUER',
-    '07350': 'RAIGUER',
-    '07360': 'RAIGUER',
-    '07141': 'RAIGUER',
-    '07420': 'RAIGUER',
-    '07430': 'RAIGUER',
-    '07510': 'RAIGUER',
-
-    // --- PLA ---
-    '07144': 'PLA',
-    '07210': 'PLA',
-    '07220': 'PLA',
-    '07230': 'PLA',
-    '07240': 'PLA',
-    '07250': 'PLA',
-    '07260': 'PLA',
-    '07313': 'PLA',
-    '07440': 'PLA',
-    '07450': 'PLA',
-    '07458': 'PLA',
-
-    // --- MIGJORN ---
-    '07620': 'MIGJORN',
-    '07630': 'MIGJORN',
-    '07640': 'MIGJORN',
-    '07650': 'MIGJORN',
-    '07660': 'MIGJORN',
-    '07670': 'MIGJORN',
-    '07680': 'MIGJORN',
-    '07690': 'MIGJORN',
-
-    // --- LLEVANT ---
-    '07500': 'LLEVANT',
-    '07550': 'LLEVANT',
-    '07560': 'LLEVANT',
-    '07570': 'LLEVANT',
-    '07580': 'LLEVANT',
-    '07590': 'LLEVANT',
+    '07110': 'TRAMUNTANA', '07193': 'TRAMUNTANA', '07190': 'TRAMUNTANA', '07140': 'TRAMUNTANA',
+    '07150': 'TRAMUNTANA', '07157': 'TRAMUNTANA', '07160': 'TRAMUNTANA', '07170': 'TRAMUNTANA',
+    '07180': 'TRAMUNTANA', '07181': 'TRAMUNTANA', '07184': 'TRAMUNTANA', '07460': 'TRAMUNTANA',
+    '07470': 'TRAMUNTANA', '07340': 'TRAMUNTANA', '07100': 'TRAMUNTANA',
+    '07300': 'RAIGUER', '07310': 'RAIGUER', '07320': 'RAIGUER', '07330': 'RAIGUER',
+    '07350': 'RAIGUER', '07360': 'RAIGUER', '07141': 'RAIGUER', '07420': 'RAIGUER',
+    '07430': 'RAIGUER', '07510': 'RAIGUER',
+    '07144': 'PLA', '07210': 'PLA', '07220': 'PLA', '07230': 'PLA', '07240': 'PLA',
+    '07250': 'PLA', '07260': 'PLA', '07313': 'PLA', '07440': 'PLA', '07450': 'PLA', '07458': 'PLA',
+    '07620': 'MIGJORN', '07630': 'MIGJORN', '07640': 'MIGJORN', '07650': 'MIGJORN',
+    '07660': 'MIGJORN', '07670': 'MIGJORN', '07680': 'MIGJORN', '07690': 'MIGJORN',
+    '07500': 'LLEVANT', '07550': 'LLEVANT', '07560': 'LLEVANT', '07570': 'LLEVANT',
+    '07580': 'LLEVANT', '07590': 'LLEVANT',
   };
 
   function norm(s) {
-    return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
   }
-  function zoneForTown(t) { return TOWN_ZONE[norm(t)] || ''; }
-  function normalizePostalCode(cp) {
-    var digits = String(cp || '').replace(/\D/g, '');
-    return digits.length >= 5 ? digits.slice(0, 5) : '';
-  }
+  function zoneForTown(t)       { return TOWN_ZONE[norm(t)] || ''; }
   function zoneForPostalCode(cp) {
-    var normalized = normalizePostalCode(cp);
-    return normalized ? (POSTAL_ZONE[normalized] || '') : '';
+    var d = String(cp || '').replace(/\D/g, '');
+    return d.length >= 5 ? (POSTAL_ZONE[d.slice(0, 5)] || '') : '';
   }
-
-  /** Extrae el valor de un tipo de componente del result de Google */
-  function getComponent(components, type, useShort) {
-    var c = (components || []).find(function (x) { return x.types.indexOf(type) !== -1; });
+  function getComponent(comps, type, useShort) {
+    var c = (comps || []).find(function (x) { return x.types.indexOf(type) !== -1; });
     return c ? (useShort ? c.short_name : c.long_name) : '';
   }
 
-  // ── DOM ready ─────────────────────────────────────────────────────────
+  // ── Estil comú per als links ───────────────────────────────────────────
+  var LINK_CSS = 'font-size:.8em;color:#1a73e8;white-space:nowrap;display:inline-block;' +
+                 'margin-left:8px;vertical-align:top;margin-top:4px;';
+  var WRAP_CSS = 'display:flex;align-items:flex-start;gap:6px;';
+
+  function makeLink(text) {
+    var a = document.createElement('a');
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = text;
+    a.style.cssText = LINK_CSS;
+    return a;
+  }
+
+  function wrapWithLink(field, link) {
+    var wrap = document.createElement('div');
+    wrap.style.cssText = WRAP_CSS;
+    field.parentNode.insertBefore(wrap, field);
+    wrap.appendChild(field);
+    wrap.appendChild(link);
+  }
+
+  // ── DOM ready ──────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', function () {
     if (document.getElementById('geocode-search-wrapper')) return;
 
+    // ── 1. Widget de cerca + link al costat del camp Adreça ────────────
     var addrField = document.getElementById('id_address');
-    if (!addrField) return;
+    if (addrField) {
+      var addrLink = makeLink('↗ Obrir Google Maps');
 
-    var latField       = document.getElementById('id_latitude');
-    var lngField       = document.getElementById('id_longitude');
-    var townField      = document.getElementById('id_town');
-    var municipalityFld = document.getElementById('id_municipality');
-    var postalFld      = document.getElementById('id_postal_code');
-    var zoneSelect     = document.getElementById('id_zone');
-    var geocoder       = null;
-
-    // ── construir widget ─────────────────────────────────────────────
-    var wrapper = document.createElement('div');
-    wrapper.id = 'geocode-search-wrapper';
-    wrapper.style.cssText = 'margin-bottom:10px;padding:10px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:4px;';
-
-    var label = document.createElement('p');
-    label.style.cssText = 'margin:0 0 6px;font-weight:bold;font-size:.9em;';
-    label.textContent = String.fromCodePoint(0x1F5FA) + ' Buscador de direccion (Google Maps)';
-    wrapper.appendChild(label);
-
-    var row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;';
-
-    var searchInput = document.createElement('input');
-    searchInput.id = 'geocode-input';
-    searchInput.type = 'text';
-    searchInput.placeholder = 'Ej: Avinguda Violetes, 18, Bunyola';
-    searchInput.style.cssText = 'flex:1;min-width:240px;padding:6px 8px;';
-    searchInput.setAttribute('aria-label', 'Buscar direccion en Google Maps');
-
-    var statusSpan = document.createElement('span');
-    statusSpan.style.cssText = 'font-size:0.85em;color:#666;';
-
-    row.appendChild(searchInput);
-    row.appendChild(statusSpan);
-    wrapper.appendChild(row);
-
-    var mapDiv = document.createElement('div');
-    mapDiv.id = 'geocode-map';
-    mapDiv.style.cssText = 'width:100%;height:260px;border:1px solid #ccc;display:none;margin-top:8px;border-radius:4px;';
-    wrapper.appendChild(mapDiv);
-
-    var addrRow = addrField.closest('.form-row') || addrField.closest('div');
-    addrRow.parentNode.insertBefore(wrapper, addrRow);
-
-    // ── esperar a que la API de Google esté lista ─────────────────────
-    var attempts = 0;
-    var timer = setInterval(function () {
-      attempts++;
-      if (window.google && window.google.maps && window.google.maps.places) {
-        clearInterval(timer);
-        initAutocomplete();
-      } else if (attempts > 60) {
-        clearInterval(timer);
-        statusSpan.textContent = 'Error: Google Maps no cargó. Comprueba la API key en .env';
-        statusSpan.style.color = '#c00';
+      function buildAddrHref() {
+        var text = addrField.value.trim();
+        var town = (document.getElementById('id_town') || {}).value || '';
+        var query = text && town ? text + ', ' + town : (text || town);
+        return 'https://www.google.com/maps/search/' + encodeURIComponent(query || 'Mallorca');
       }
-    }, 200);
+      function refreshAddrLink() { addrLink.href = buildAddrHref(); }
+      refreshAddrLink();
+      addrField.addEventListener('input', refreshAddrLink);
+      addrField.addEventListener('change', refreshAddrLink);
 
-    // ── mapa existente al editar ──────────────────────────────────────
-    if (latField && lngField && latField.value.trim() && lngField.value.trim()) {
-      var attempts2 = 0;
-      var timer2 = setInterval(function () {
-        attempts2++;
-        if (window.google && window.google.maps) {
-          clearInterval(timer2);
-          showMap(parseFloat(latField.value), parseFloat(lngField.value));
-        } else if (attempts2 > 60) { clearInterval(timer2); }
+      wrapWithLink(addrField, addrLink);
+
+      // ── Quadre de cerca Google Maps (sense mapa) ──────────────────
+      var wrapper = document.createElement('div');
+      wrapper.id = 'geocode-search-wrapper';
+      wrapper.style.cssText = 'margin-bottom:10px;padding:8px 10px;background:#f8f9fa;' +
+                              'border:1px solid #dee2e6;border-radius:4px;';
+
+      var label = document.createElement('p');
+      label.style.cssText = 'margin:0 0 5px;font-weight:bold;font-size:.85em;color:#374151;';
+      label.textContent = '🔍 Cercador d\'adreces (Google Maps)';
+      wrapper.appendChild(label);
+
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:6px;align-items:center;';
+
+      var searchInput = document.createElement('input');
+      searchInput.id = 'geocode-input';
+      searchInput.type = 'text';
+      searchInput.placeholder = 'Ex: Avinguda Violetes, 18, Bunyola';
+      searchInput.style.cssText = 'flex:1;min-width:240px;padding:5px 8px;';
+      searchInput.setAttribute('autocomplete', 'off');
+
+      var statusSpan = document.createElement('span');
+      statusSpan.style.cssText = 'font-size:.82em;color:#666;';
+
+      row.appendChild(searchInput);
+      row.appendChild(statusSpan);
+      wrapper.appendChild(row);
+
+      var addrRow = addrField.closest('.form-row') || addrField.closest('div');
+      addrRow.parentNode.insertBefore(wrapper, addrRow);
+
+      // Esperar Google Maps API
+      var attempts = 0;
+      var timer = setInterval(function () {
+        attempts++;
+        if (window.google && window.google.maps && window.google.maps.places) {
+          clearInterval(timer);
+          initSearchWidget(searchInput, statusSpan);
+        } else if (attempts > 60) {
+          clearInterval(timer);
+          statusSpan.textContent = 'Google Maps no disponible (comprova la API key)';
+          statusSpan.style.color = '#c00';
+        }
       }, 200);
     }
 
-    function initAutocomplete() {
-      var autocomplete = new window.google.maps.places.Autocomplete(searchInput, {
-        componentRestrictions: { country: 'es' },
-        fields: ['address_components', 'geometry', 'formatted_address', 'name'],
-        types: ['address'],
-      });
+    // ── 2. Links al costat dels camps de coordenades "lat, lng" ────────
+    function addCoordsLink(fieldId) {
+      var field = document.getElementById(fieldId);
+      if (!field) return;
 
-      // Centrar sugerencias en Mallorca
-      var mallorcaBounds = new window.google.maps.LatLngBounds(
-        { lat: 39.26, lng: 2.30 },
-        { lat: 39.97, lng: 3.48 }
-      );
-      autocomplete.setBounds(mallorcaBounds);
+      var link = makeLink('↗ Obrir Google Maps');
 
-      autocomplete.addListener('place_changed', function () {
-        var place = autocomplete.getPlace();
-        if (!place.geometry) {
-          statusSpan.textContent = 'No se encontro la direccion. Prueba de nuevo.';
-          return;
-        }
-        applyPlace(place);
-        statusSpan.textContent = String.fromCodePoint(0x2714) + ' Seleccionado';
-      });
-
-      geocoder = new window.google.maps.Geocoder();
-    }
-
-    function applyAddressComponents(comps, fallbackAddress) {
-      // calle + numero
-      var street = getComponent(comps, 'route', false);
-      var num    = getComponent(comps, 'street_number', false);
-      addrField.value = street && num ? street + ', ' + num : (street || fallbackAddress || '');
-
-      // municipio para mostrar en el campo "town"
-      var displayTown = getComponent(comps, 'locality', false)
-                     || getComponent(comps, 'administrative_area_level_3', false)
-                     || getComponent(comps, 'postal_town', false);
-      if (townField && displayTown) townField.value = displayTown;
-
-      // municipio administrativo real
-      var municipalityVal = getComponent(comps, 'administrative_area_level_3', false)
-                         || getComponent(comps, 'locality', false);
-      if (municipalityFld && municipalityVal) municipalityFld.value = municipalityVal;
-
-      // codigo postal
-      var cp = getComponent(comps, 'postal_code', false);
-      if (postalFld && cp) postalFld.value = cp;
-
-      // zona comarca: prioridad por codigo postal y fallback por municipio/poblacion
-      var zoneCandidates = [
-        getComponent(comps, 'administrative_area_level_3', false),
-        getComponent(comps, 'locality', false),
-        getComponent(comps, 'postal_town', false),
-        getComponent(comps, 'administrative_area_level_2', false),
-      ];
-      var detectedByPostal = zoneForPostalCode(cp);
-      var detectedZone = '';
-      var zoneSourceTown = '';
-      var zoneSourceLabel = '';
-
-      if (detectedByPostal) {
-        detectedZone = detectedByPostal;
-        zoneSourceTown = normalizePostalCode(cp);
-        zoneSourceLabel = 'CP';
-      } else {
-        for (var i = 0; i < zoneCandidates.length; i++) {
-          if (zoneCandidates[i]) {
-            var z = zoneForTown(zoneCandidates[i]);
-            if (z) {
-              detectedZone = z;
-              zoneSourceTown = zoneCandidates[i];
-              zoneSourceLabel = 'municipio';
-              break;
-            }
+      function refresh() {
+        var parts = field.value.trim().split(',');
+        if (parts.length >= 2) {
+          var lat = parseFloat(parts[0]), lng = parseFloat(parts[1]);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            link.href = 'https://www.google.com/maps?q=' + lat.toFixed(6) + ',' + lng.toFixed(6);
+            link.style.display = 'inline-block';
+            return;
           }
         }
+        link.style.display = 'none';
       }
 
-      if (!zoneSelect) return;
-
-      if (detectedZone) {
-        zoneSelect.value = detectedZone;
-        zoneSelect.dispatchEvent(new Event('change', { bubbles: true }));
-        zoneSelect.style.background = '#d4edda';
-        setTimeout(function () { zoneSelect.style.background = ''; }, 2000);
-        statusSpan.textContent = String.fromCodePoint(0x2714)
-          + ' Seleccionado · Zona: ' + zoneSelect.options[zoneSelect.selectedIndex].text
-          + ' (via ' + zoneSourceLabel + ': ' + zoneSourceTown + ')';
-      } else {
-        statusSpan.textContent = String.fromCodePoint(0x2714)
-          + ' Seleccionado (zona no detectada, seleccionala manualmente)';
-      }
+      wrapWithLink(field, link);
+      refresh();
+      field.addEventListener('input', refresh);
+      field.addEventListener('change', refresh);
     }
 
-    function applyPlace(place) {
-      var comps = place.address_components || [];
-      var lat   = place.geometry.location.lat();
-      var lng   = place.geometry.location.lng();
+    addCoordsLink('id_coords_cabin');
+    addCoordsLink('id_coords_entrance');
 
-      // coordenadas
-      if (latField) latField.value = lat.toFixed(6);
-      if (lngField) lngField.value = lng.toFixed(6);
-
-      applyAddressComponents(comps, place.formatted_address || '');
-
-      showMap(lat, lng);
-    }
-
-    function updateFromCoordinates() {
-      if (!latField || !lngField) return;
-
-      var lat = parseFloat(latField.value);
-      var lng = parseFloat(lngField.value);
-      if (isNaN(lat) || isNaN(lng)) return;
-      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-        statusSpan.textContent = 'Coordenadas fuera de rango.';
-        return;
-      }
-
-      if (!window.google || !window.google.maps) {
-        statusSpan.textContent = 'Google Maps no esta listo aun.';
-        return;
-      }
-      if (!geocoder) geocoder = new window.google.maps.Geocoder();
-
-      statusSpan.textContent = 'Actualizando campos desde coordenadas...';
-      geocoder.geocode({ location: { lat: lat, lng: lng } }, function (results, status) {
-        if (status === 'OK' && results && results.length > 0) {
-          applyAddressComponents(results[0].address_components || [], results[0].formatted_address || '');
-          showMap(lat, lng);
-        } else {
-          statusSpan.textContent = 'No se pudo resolver la direccion desde lat/lng.';
-        }
-      });
-    }
-
+    // ── 3. Link per a DepotConfig (camps id_latitude + id_longitude) ───
+    var latField = document.getElementById('id_latitude');
+    var lngField = document.getElementById('id_longitude');
     if (latField && lngField) {
-      latField.addEventListener('change', updateFromCoordinates);
-      lngField.addEventListener('change', updateFromCoordinates);
-      latField.addEventListener('blur', updateFromCoordinates);
-      lngField.addEventListener('blur', updateFromCoordinates);
+      var depotLink = makeLink('↗ Obrir Google Maps');
+
+      function refreshDepot() {
+        var lat = parseFloat(latField.value), lng = parseFloat(lngField.value);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          depotLink.href = 'https://www.google.com/maps?q=' + lat.toFixed(6) + ',' + lng.toFixed(6);
+          depotLink.style.display = 'inline-block';
+        } else {
+          depotLink.style.display = 'none';
+        }
+      }
+
+      wrapWithLink(latField, depotLink);
+      refreshDepot();
+      latField.addEventListener('input', refreshDepot);
+      latField.addEventListener('change', refreshDepot);
+      lngField.addEventListener('input', refreshDepot);
+      lngField.addEventListener('change', refreshDepot);
     }
 
-    function showMap(lat, lng) {
-      mapDiv.style.display = 'block';
-      var center = { lat: lat, lng: lng };
-      var map = new window.google.maps.Map(mapDiv, {
-        center: center,
-        zoom: 17,
-        mapTypeControl: false,
-        streetViewControl: false,
-      });
-      new window.google.maps.Marker({ position: center, map: map });
-    }
   });
+
+  // ── Inicialitza el quadre de cerca (sense mapa) ───────────────────────
+  function initSearchWidget(searchInput, statusSpan) {
+    var ac = new window.google.maps.places.Autocomplete(searchInput, {
+      componentRestrictions: { country: 'es' },
+      fields: ['address_components', 'geometry'],
+      types: ['address'],
+    });
+    ac.setBounds(new window.google.maps.LatLngBounds(
+      { lat: 39.26, lng: 2.30 }, { lat: 39.97, lng: 3.48 }
+    ));
+    ac.addListener('place_changed', function () {
+      var place = ac.getPlace();
+      if (!place || !place.address_components) {
+        statusSpan.textContent = 'No s\'ha trobat l\'adreça. Torna-ho a provar.';
+        return;
+      }
+      applyComponents(place.address_components);
+      if (place.geometry && place.geometry.location) {
+        var lat = place.geometry.location.lat();
+        var lng = place.geometry.location.lng();
+        var latFld = document.getElementById('id_latitude');
+        var lngFld = document.getElementById('id_longitude');
+        if (latFld) latFld.value = lat.toFixed(6);
+        if (lngFld) lngFld.value = lng.toFixed(6);
+        if (latFld) latFld.dispatchEvent(new Event('change'));
+      }
+      statusSpan.textContent = '✔ Seleccionat';
+      statusSpan.style.color = '#166534';
+      setTimeout(function () { statusSpan.textContent = ''; }, 3000);
+      searchInput.value = '';
+    });
+  }
+
+  function applyComponents(comps) {
+    var street   = getComponent(comps, 'route', false);
+    var num      = getComponent(comps, 'street_number', false);
+    var addrFld  = document.getElementById('id_address');
+    if (addrFld && street) addrFld.value = street + (num ? ', ' + num : '');
+
+    var town = getComponent(comps, 'locality', false)
+            || getComponent(comps, 'administrative_area_level_3', false);
+    var townFld = document.getElementById('id_town');
+    if (townFld && town) townFld.value = town;
+
+    var cp = getComponent(comps, 'postal_code', false);
+    var cpFld = document.getElementById('id_postal_code');
+    if (cpFld && cp) cpFld.value = cp;
+
+    var zone = zoneForPostalCode(cp)
+            || zoneForTown(getComponent(comps, 'administrative_area_level_3', false))
+            || zoneForTown(town);
+    var zoneSel = document.getElementById('id_zone');
+    if (zoneSel && zone) {
+      zoneSel.value = zone;
+      zoneSel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
 })();

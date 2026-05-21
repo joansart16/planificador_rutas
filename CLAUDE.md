@@ -11,6 +11,7 @@ Antes de proponer cualquier cambio de código, asegúrate de cumplir esto:
 2. ¿Afecta esto a las rutas existentes? Si se cambia un Contrato, ¿qué pasa con sus Tareas (ServiceTask)?
 3. Si hay cambios en modelos, ¿has proporcionado el comando `makemigrations`?
 4. **NUNCA** uses variables en duro (hardcode) para nombres de pueblos o zonas. Usa SIEMPRE Códigos Postales o identificadores estables.
+5. **i18n:** Los `msgid` en `.po` son SIEMPRE en castellano. Las cadenas en templates/JS deben usar `{% trans "..." %}` / `_()`. Nunca hardcodear cadenas en catalán directamente.
 
 ---
 
@@ -48,8 +49,9 @@ Antes de proponer cualquier cambio de código, asegúrate de cumplir esto:
 
 1. **BASE DE DATOS:** PostgreSQL. FKs con `on_delete=PROTECT` en entidades críticas (Company, Driver, Vehicle, Location, Contract). Solo `CASCADE` cuando el usuario lo pide explícitamente.
 2. **DJANGO ADMIN:** UI principal. Toda la lógica de presentación va en `admin.py` (filtros, inlines, acciones). La lógica de negocio va en `models.py` o `signals.py`.
-3. **GEOLOCALIZACIÓN:** `Location` usa datos estáticos + Google Maps Places Autocomplete para geocodificación al crear.
-4. **MÓDULOS:** Sistema de módulos `OBRA` / `EVENTO` gestionado por sesión (`request.session['current_module']`). El `ModuleFilterMixin` filtra todos los querysets automáticamente.
+3. **GEOLOCALIZACIÓN:** `Location` usa datos estáticos + Google Maps Places Autocomplete para geocodificación al crear. JS en `location_geocode.js` cargado en `LocationAdmin`, `ContractAdmin` y `DepotConfigAdmin`.
+4. **MÓDULOS:** Sistema de módulos `OBRA` / `EVENTO` gestionado por sesión (`request.session['current_module']`). El `ModuleFilterMixin` filtra todos los querysets automáticamente. `CompanyAdmin` también filtra por módulo (vía `locations__contracts__module`).
+5. **DEPOT CONFIG:** Punto de inicio de rutas gestionado en BD (`DepotConfig` singleton, pk=1). `DepotConfig.get_current()` fallback a `settings.DEPOT_COORDS` si no hay registro.
 
 ---
 
@@ -62,30 +64,32 @@ Antes de proponer cualquier cambio de código, asegúrate de cumplir esto:
 
 ---
 
-# Estado Actual del Código (v0.1.6)
+# Estado Actual del Código (v0.1.9)
 
 ## Estructura de Directorios
 
 ```
 planificador_rutas/       ← Config Django (settings.py, urls.py, wsgi.py)
 rutas/                    ← Única app (toda la lógica aquí)
-  models.py               ← ~818 líneas — 8 modelos
-  admin.py                ← ~2285 líneas — 7 clases admin + 20+ vistas/acciones custom
+  models.py               ← ~860 líneas — 9 modelos (incluye DepotConfig)
+  admin.py                ← ~2350 líneas — 8 clases admin + 20+ vistas/acciones custom
   signals.py              ← Auto-generación de tareas al crear Contract
   views.py                ← Home + set_module (solo 2 vistas públicas)
   apps.py, templatetags/loorent_tags.py
-  migrations/             ← 23 migraciones
+  migrations/             ← 24 migraciones (0024_add_depot_config)
   management/commands/    ← seed_demo.py, crear_usuarios.py
   static/rutas/admin/
-    admin_loorent_styles.css        ← 2500+ líneas de CSS custom
-    admin_filter_dropdown.js        ← 385 líneas — filtros columna estilo Excel
+    admin_loorent_styles.css        ← CSS custom
+    admin_filter_dropdown.js        ← filtros columna estilo Excel (Tom Select)
     contract_dates_tomorrow.js      ← botón "Mañana" en campos fecha
-    location_geocode.js             ← Google Maps Places Autocomplete
+    location_geocode.js             ← Google Maps Places Autocomplete + links "Obrir Google Maps"
 templates/
   home.html                         ← Selector de módulo (OBRA/EVENTO)
   admin/base_site.html              ← Header Loorent, badge versión, botones idioma
-  admin/rutas/{model}/              ← Templates custom por modelo (change_list, formularios)
-locale/                   ← i18n ES / CA
+  admin/rutas/{model}/              ← Templates custom por modelo
+    contract/change_form.html       ← Carga Google Maps API; añade link "Todos los Mantenimientos" vía JS
+    depotconfig/change_form.html    ← Carga Google Maps API
+locale/                   ← i18n ES / CA (django.po + django.mo compilado con script Python propio)
 scripts/db_sync.sh
 .github/workflows/        ← CI/CD: deploy-staging.yml, deploy-production.yml
 Dockerfile, docker-compose.server.yml
@@ -104,6 +108,7 @@ Dockerfile, docker-compose.server.yml
 | `ServiceTask` | `task_type` (ENTREGA/LIMPIEZA/RECOGIDA), `scheduled_date`, `driver` (FK PROTECT), `vehicle` (FK PROTECT), `location` (FK PROTECT), `contract` (FK CASCADE), `suggested_vehicle_size`, `is_cancelled` | → `RouteStop` |
 | `Route` | `date`, `module`, `driver` (FK SET_NULL), `vehicle` (FK SET_NULL), `name`, `is_cancelled` | → muchos `RouteStop` |
 | `RouteStop` | `route` (FK CASCADE), `task` (FK CASCADE, unique), `order` | — |
+| `DepotConfig` | `name`, `address`, `latitude`, `longitude` | singleton (pk=1 forzado en `save()`, `delete()` bloqueado) |
 
 **Validaciones en `ServiceTask.clean()`** (las 5 reglas de oro):
 1. Gálibo LIMPIEZA: `vehicle.size <= location.max_vehicle_size`
@@ -125,13 +130,26 @@ Dockerfile, docker-compose.server.yml
 
 | Clase | Highlights |
 |-------|-----------|
-| `CompanyAdmin` | list_display: name, email, location_count |
+| `CompanyAdmin` | Filtra por módulo (vía `locations__contracts__module`); columna "Comandes" con link al listado filtrado |
 | `DriverAdmin` | Inline de ausencias; filtro disponibilidad mañana; MultipleChoiceField para working_days |
 | `VehicleAdmin` | Filtros status/size; Excel con dropdowns validados |
-| `LocationAdmin` | 15 columnas en list_display; autocomplete company/driver; integrado en formulario de Contract |
-| `ContractAdmin` | Formulario integra campos de Location; inline ServiceTask; acción "Generar tareas" por fecha |
+| `LocationAdmin` | 15 columnas en list_display; autocomplete company/driver; integrado en formulario de Contract; carga `location_geocode.js` |
+| `ContractAdmin` | Formulario integra campos de Location; inline `ServiceTaskInline` (últimas 5 tareas, plegable); link "Todos los Mantenimientos" al pie del inline vía JS en template |
 | `ServiceTaskAdmin` | Exportar día a Excel; acción bulk "Reasignar conductor"; filtros PendingAssignmentFilter, ScheduledDateFilter |
 | `RouteAdmin` | Inline RouteStops; vistas mapa por ruta y por día; reorder/add-stop/transfer via JSON API; export Excel por ruta |
+| `DepotConfigAdmin` | Singleton — changelist redirige al change form; no permite add ni delete; carga `location_geocode.js`; título "Inicio de rutas" |
+
+**Truco inline limitado a N elementos:**
+```python
+class _Last5TasksFormSet(forms.models.BaseInlineFormSet):
+    def get_queryset(self):
+        return super().get_queryset()[:5]  # slice AQUÍ, no en InlineModelAdmin.get_queryset
+```
+Importante: el slice debe hacerse en `BaseInlineFormSet.get_queryset()`, NO en `InlineModelAdmin.get_queryset(request)`, porque en este último Django todavía no ha aplicado el filtro del padre (FK) y lanzará `TypeError: Cannot filter a query once a slice has been taken`.
+
+**Menú del admin (ROUTES_MENU_ORDER):**
+`Vehicle(1) → Driver(2) → Company(3) → Contract(4) → ServiceTask(5) → Route(6) → DepotConfig(7)`
+`Location` está oculta del sidebar (se edita desde el formulario de Contract).
 
 **URLs custom del admin (las más importantes):**
 - `GET /admin/rutas/contract/generar-tareas/` — crear LIMPIEZA para una fecha
@@ -143,10 +161,7 @@ Dockerfile, docker-compose.server.yml
 - `POST /admin/rutas/route/transfer-stop/` — mover parada entre rutas (JSON)
 - `GET /admin/rutas/route/<pk>/export/` — exportar ruta a Excel
 - `POST /admin/rutas/route/regenerar-ruta/` — regenerar ruta desde default_driver
-
-**Personalización del admin site:**
-- Sidebar oculta `Location` (se edita desde el formulario de Contract)
-- Orden del menú: Vehicle → Driver → Company → Contract → ServiceTask → Route
+- `GET /admin/rutas/depotconfig/` — redirige a change form del singleton
 
 ## URLs Públicas
 
@@ -171,16 +186,22 @@ Dockerfile, docker-compose.server.yml
 - **CSS:** `admin_loorent_styles.css` — todo custom (sin Tailwind compilado). Tom Select override, tablas, filtros, colores Loorent.
 - **JS clave:**
   - `admin_filter_dropdown.js` — reimplementa el sidebar de filtros de Django como filtros de columna estilo Excel (Tom Select).
-  - `location_geocode.js` — Google Maps Places Autocomplete; rellena address, town, postal_code, zone, coords al seleccionar ubicación.
+  - `location_geocode.js` — Google Maps Places Autocomplete (widget de búsqueda sin mapa); links "↗ Obrir Google Maps" junto a campos de dirección y coordenadas; rellena address, town, postal_code, zone al seleccionar.
   - `contract_dates_tomorrow.js` — botón "Mañana" en campos fecha del admin.
 - **Sin build step:** todo el JS/CSS se sirve directamente vía WhiteNoise.
+
+## i18n
+
+- Idiomas: castellano (base) + catalán (`locale/ca/`).
+- El archivo `.mo` se compila con un script Python propio (no `msgfmt`) porque `msgfmt` no está disponible en Windows.
+- **Regla**: `msgid` siempre en castellano. Las traducciones al catalán van en `django.po`. Las cadenas en templates deben usar `{% load i18n %}` + `{% trans "..." %}`. Las cadenas en Python deben usar `_()`.
 
 ## Despliegue
 
 - **Docker:** `python:3.12-slim`, entrypoint = `migrate` + `collectstatic` + `gunicorn` (3 workers, timeout 120s)
 - **docker-compose.server.yml:** staging + production separados (PostgreSQL 15-alpine, volúmenes independientes), nginx multi-dominio con Certbot SSL, cron db_sync (clon prod→staging cada sábado 02:00)
 - **CI/CD:** GitHub Actions (.github/workflows/) auto-bump de versión + deploy
-- **Env vars clave:** `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `DB_*`, `GOOGLE_MAPS_API_KEY`, `DEPOT_COORDS`
+- **Env vars clave:** `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `DB_*`, `GOOGLE_MAPS_API_KEY`, `DEPOT_COORDS` (fallback si no hay `DepotConfig` en BD)
 
 ---
 

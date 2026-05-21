@@ -18,7 +18,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from .models import Company, Contract, Driver, DriverUnavailability, Location, Route, RouteStop, ServiceTask, Vehicle
+from .models import Company, Contract, DepotConfig, Driver, DriverUnavailability, Location, Route, RouteStop, ServiceTask, Vehicle
 
 
 ROUTES_MENU_ORDER = {
@@ -28,6 +28,7 @@ ROUTES_MENU_ORDER = {
     'Contract': 4,
     'ServiceTask': 5,
     'Route': 6,
+    'DepotConfig': 7,
 }
 
 MODULE_OBRA   = 'OBRA'
@@ -407,91 +408,91 @@ class ContractWithLocationForm(forms.ModelForm):
     # ── Campos de Ubicación ──────────────────────────────────────────────────
     name = forms.CharField(
         max_length=200,
-        label='Nombre del sitio',
+        label=_('Nombre del sitio'),
     )
     company = forms.ModelChoiceField(
         queryset=Company.objects.all(),
         required=False,
-        label='Empresa / Cliente',
-        help_text='Empresa titular. Permite filtrar todas sus ubicaciones.',
+        label=_('Empresa / Cliente'),
+        help_text=_('Empresa titular. Permite filtrar todas sus ubicaciones.'),
     )
     default_driver = forms.ModelChoiceField(
         queryset=Driver.objects.all(),
         required=False,
-        label='Conductor por defecto',
-        help_text='Se asignará automáticamente a las tareas de este sitio.',
+        label=_('Conductor por defecto'),
+        help_text=_('Se asignará automáticamente a las tareas de este sitio.'),
     )
     contact_name = forms.CharField(
         max_length=150, required=False,
-        label='Persona de contacto',
+        label=_('Persona de contacto'),
     )
     contact_phone = forms.CharField(
         max_length=20, required=False,
-        label='Teléfono de contacto',
+        label=_('Teléfono de contacto'),
     )
     email = forms.EmailField(
         required=False,
-        label='Email contacto obra',
-        help_text='Opcional. Si se rellena, se usa en el exportador en lugar del email del cliente.',
+        label=_('Email contacto obra'),
+        help_text=_('Opcional. Si se rellena, se usa en el exportador en lugar del email del cliente.'),
     )
     comment = forms.CharField(
         widget=forms.Textarea(attrs={'rows': 3}),
         required=False,
-        label='Comentario',
-        help_text='Indicaciones operativas para el servicio en esta ubicación.',
+        label=_('Comentario'),
+        help_text=_('Indicaciones operativas para el servicio en esta ubicación.'),
     )
     cabin_count = forms.IntegerField(
         min_value=1,
         initial=1,
-        label='Número de cabinas',
+        label=_('Número de cabinas'),
     )
     address = forms.CharField(
         widget=forms.Textarea(attrs={'rows': 2}),
-        label='Dirección (calle y número)',
+        label=_('Dirección (calle y número)'),
     )
     town = forms.CharField(
         max_length=100, required=False,
-        label='Población',
-        help_text='Núcleo habitado (ej: Palmanyola). Se rellena automáticamente.',
+        label=_('Población'),
+        help_text=_('Núcleo habitado (ej: Palmanyola). Se rellena automáticamente.'),
     )
     municipality = forms.CharField(
         max_length=100, required=False,
-        label='Municipio',
-        help_text='Municipio administrativo (ej: Bunyola). Se usa para calcular la comarca.',
+        label=_('Municipio'),
+        help_text=_('Municipio administrativo (ej: Bunyola). Se usa para calcular la comarca.'),
     )
     postal_code = forms.CharField(
         max_length=10, required=False,
-        label='Código postal',
+        label=_('Código postal'),
     )
     zone = forms.ChoiceField(
         choices=[('', '---------')] + list(Location.Zone.choices),
         required=False,
-        label='Zona de Mallorca',
-        help_text='Comarca o zona de la isla.',
+        label=_('Zona de Mallorca'),
+        help_text=_('Comarca o zona de la isla.'),
     )
     coords_cabin = forms.CharField(
         max_length=50, required=False,
-        label='Coordenadas cabina',
-        help_text='Pega desde Google Maps (ej: 39.619316, 2.643553).',
+        label=_('Coordenadas cabina'),
+        help_text=_('Pega desde Google Maps (ej: 39.619316, 2.643553).'),
     )
     coords_entrance = forms.CharField(
         max_length=50, required=False,
-        label='Coordenadas entrada finca',
-        help_text='Opcional. Si se rellena, el exportador genera una fila extra con "Entrada finca".',
+        label=_('Coordenadas entrada finca'),
+        help_text=_('Opcional. Si se rellena, el exportador genera una fila extra con "Entrada finca".'),
     )
     max_vehicle_size = forms.TypedChoiceField(
         choices=Vehicle.Size.choices,
         coerce=int,
-        label='Tamaño máximo de vehículo',
-        help_text='Vehículos con tamaño superior serán rechazados (gálibo).',
+        label=_('Tamaño máximo de vehículo'),
+        help_text=_('Vehículos con tamaño superior serán rechazados (gálibo).'),
     )
 
     # ── Campos de Contrato ────────────────────────────────────────────────────
     module = forms.ChoiceField(
         choices=Contract.Module.choices,
         initial=Contract.Module.OBRA,
-        label='Módulo',
-        help_text='Obra o Evento.',
+        label=_('Módulo'),
+        help_text=_('Obra o Evento.'),
     )
     cleaning_weekdays = forms.TypedMultipleChoiceField(
         label=_('Dias de limpieza'),
@@ -623,7 +624,7 @@ class CompanyAdmin(ExcelImportExportMixin, admin.ModelAdmin):
         ('correo_electronico', 'Correo válido o vacío', 'Email de contacto principal.'),
     ]
 
-    list_display  = ('name', 'email', 'location_count')
+    list_display  = ('name', 'email', 'location_count', 'contract_count_link')
     search_fields = ('name', 'email')
     ordering      = ('name',)
     actions       = ['delete_selected']
@@ -634,11 +635,32 @@ class CompanyAdmin(ExcelImportExportMixin, admin.ModelAdmin):
     )
 
     def get_queryset(self, request):
-        return super().get_queryset(request).annotate(location_count=Count('locations'))
+        module = _current_module(request)
+        return (
+            super().get_queryset(request)
+            .filter(locations__contracts__module=module)
+            .distinct()
+            .annotate(
+                location_count=Count('locations', distinct=True),
+                contract_count=Count(
+                    'locations__contracts',
+                    filter=Q(locations__contracts__module=module),
+                    distinct=True,
+                ),
+            )
+        )
 
     @admin.display(description='Ubicaciones', ordering='location_count')
     def location_count(self, obj: Company) -> int:
         return obj.location_count
+
+    @admin.display(description='Comandes', ordering='contract_count')
+    def contract_count_link(self, obj: Company):
+        count = obj.contract_count
+        if not count:
+            return '—'
+        url = reverse('admin:rutas_contract_changelist') + f'?location__company__id__exact={obj.pk}'
+        return format_html('<a href="{}">{} comandes</a>', url, count)
 
     def import_excel_row(self, row_data) -> bool:
         name = _as_text(row_data['razon_social'])
@@ -844,6 +866,15 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
     ordering       = ('company__name', 'name')
     actions        = ['delete_selected']
     autocomplete_fields = ('company', 'default_driver')
+
+    class Media:
+        js = ('rutas/admin/location_geocode.js',)
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['google_maps_api_key'] = settings.GOOGLE_MAPS_API_KEY
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
     fieldsets      = (
         ('Identificación', {
             'fields': ('name', 'company', 'default_driver'),
@@ -853,7 +884,7 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
             'description': 'Responsable de la ubicación.',
         }),
         ('Dirección y coordenadas', {
-            'fields': ('address', 'town', 'municipality', 'postal_code', 'zone', 'coords_cabin', 'coords_entrance'),
+            'fields': ('address', 'town', 'postal_code', 'zone', 'coords_cabin', 'coords_entrance'),
         }),
         ('Restricción de vehículo', {
             'fields': ('max_vehicle_size',),
@@ -953,14 +984,22 @@ class LocationAdmin(ExcelImportExportMixin, admin.ModelAdmin):
 # ──────────────────────────────────────────────────────────────────────────────
 # Inline: tareas del contrato (solo lectura de tipo/fecha; asignación de chofer/vehículo)
 # ──────────────────────────────────────────────────────────────────────────────
+class _Last5TasksFormSet(forms.models.BaseInlineFormSet):
+    def get_queryset(self):
+        return super().get_queryset()[:5]
+
+
 class ServiceTaskInline(admin.TabularInline):
     model               = ServiceTask
     extra               = 0
+    formset             = _Last5TasksFormSet
     fields              = ('task_type', 'scheduled_date', 'suggested_vehicle_size', 'driver', 'vehicle')
     readonly_fields     = ('task_type', 'scheduled_date', 'suggested_vehicle_size')
-    ordering            = ('scheduled_date',)
+    ordering            = ('-scheduled_date',)
     show_change_link    = True
     autocomplete_fields = ('driver', 'vehicle')
+    classes             = ('collapse',)
+    verbose_name_plural = _('Mantenimientos (últimos 5)')
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1009,38 +1048,61 @@ class ContractBudgetFilter(admin.SimpleListFilter):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# DepotConfig — punto de inicio/fin de rutas (singleton)
+# ──────────────────────────────────────────────────────────────────────────────
+@admin.register(DepotConfig)
+class DepotConfigAdmin(admin.ModelAdmin):
+    change_form_template = 'admin/rutas/depotconfig/change_form.html'
+
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'address', 'latitude', 'longitude'),
+            'description': (
+                'Punto de salida y llegada de todas las rutas. '
+                'Usa el buscador de Google Maps para localizar el almacén; '
+                'las coordenadas se rellenarán automáticamente. '
+                'Aparece como marcador en el mapa del día y en cada ruta individual.'
+            ),
+        }),
+    )
+
+    class Media:
+        js = ('rutas/admin/location_geocode.js',)
+
+    def has_add_permission(self, request):
+        return not DepotConfig.objects.filter(pk=1).exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '',
+                self.admin_site.admin_view(self._redirect_to_object),
+                name='rutas_depotconfig_changelist',
+            ),
+        ]
+        return custom_urls + urls
+
+    def _redirect_to_object(self, request):
+        obj = DepotConfig.get_or_create_default()
+        return redirect(reverse('admin:rutas_depotconfig_change', args=[obj.pk]))
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['google_maps_api_key'] = settings.GOOGLE_MAPS_API_KEY
+        extra_context['title'] = 'Inicio de rutas'
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Contract
 # ──────────────────────────────────────────────────────────────────────────────
 @admin.register(Contract)
-class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin):
+class ContractAdmin(ModuleFilterMixin, admin.ModelAdmin):
     _module_field = 'module'
-    excel_template_filename = 'contratos_plantilla.xlsx'
-    excel_template_columns = [
-        'ubicacion', 'fecha_inicio', 'fecha_fin', 'limpiezas_semana', 'dias_limpieza',
-        'hora_acceso_inicio', 'hora_acceso_fin', 'estado',
-    ]
-    excel_template_rows = [[
-        'Obra Son Vida', '2026-05-06', '', 3, '0,2,4', '08:00', '18:00', 'Activo',
-    ]]
-    excel_instructions = [
-        'dias_limpieza: números separados por coma entre 0 y 6 (0=Lunes, 6=Domingo).',
-        'estado permitido: ACTIVE o CLOSED (o su etiqueta en español).',
-        'Si el contrato ya existe (misma ubicación + fecha_inicio), se omitirá.',
-    ]
-    excel_value_guide = [
-        ('ubicacion', 'Nombre de ubicación existente', 'Ubicación a la que pertenece el contrato.'),
-        ('fecha_inicio', 'YYYY-MM-DD o DD/MM/YYYY', 'Fecha de alta del contrato.'),
-        ('fecha_fin', 'YYYY-MM-DD o DD/MM/YYYY o vacío', 'Fecha de recogida/fin.'),
-        ('limpiezas_semana', '1..7', 'Número de limpiezas semanales.'),
-        ('dias_limpieza', '0..6 separados por coma', '0=Lunes, 1=Martes, 2=Miércoles, 3=Jueves, 4=Viernes, 5=Sábado, 6=Domingo.'),
-        ('hora_acceso_inicio', 'HH:MM o vacío', 'Hora mínima de acceso.'),
-        ('hora_acceso_fin', 'HH:MM o vacío', 'Hora máxima de acceso.'),
-        ('estado', 'Activo, Interrumpido o Retirado', 'Estado administrativo del pedido.'),
-    ]
-    excel_validations = {
-        'limpiezas_semana': ['1', '2', '3', '4', '5', '6', '7'],
-        'estado': ['Activo', 'Interrumpido', 'Retirado'],
-    }
 
     form = ContractWithLocationForm
     change_list_template = 'admin/rutas/contract/change_list.html'
@@ -1071,48 +1133,49 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
             'https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js',
             'rutas/admin/admin_filter_dropdown.js',
             'rutas/admin/contract_dates_tomorrow.js',
+            'rutas/admin/location_geocode.js',
         )
 
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser
 
     fieldsets      = (
-        ('Módulo', {
+        (_('Módulo'), {
             'fields': ('module',),
-            'description': 'Indica si este pedido pertenece a Obra o a Evento.',
+            'description': _('Indica si este pedido pertenece a Obra o a Evento.'),
         }),
-        ('Presupuesto', {
+        (_('Presupuesto'), {
             'fields': ('budget_number',),
         }),
-        ('Identificación de la ubicación', {
+        (_('Identificación de la ubicación'), {
             'fields': ('name', 'company', 'default_driver'),
         }),
-        ('Contacto en obra', {
+        (_('Contacto en obra'), {
             'fields': ('contact_name', 'contact_phone', 'email', 'comment', 'cabin_count'),
-            'description': 'Responsable de la ubicación.',
+            'description': _('Responsable de la ubicación.'),
         }),
-        ('Dirección y coordenadas', {
-            'fields': ('address', 'town', 'municipality', 'postal_code', 'zone', 'coords_cabin', 'coords_entrance'),
-            'description': (
+        (_('Dirección y coordenadas'), {
+            'fields': ('address', 'town', 'postal_code', 'zone', 'coords_cabin', 'coords_entrance'),
+            'description': _(
                 'Dirección textual de la ubicación. '
                 'Coordenadas: pega directamente desde Google Maps (ej: 39.619316, 2.643553).'
             ),
         }),
-        ('Restricción de vehículo', {
+        (_('Restricción de vehículo'), {
             'fields': ('max_vehicle_size',),
         }),
-        ('Período del contrato', {
+        (_('Período del contrato'), {
             'fields': ('start_date', 'end_date', 'cleaning_frequency', 'cleaning_weekdays'),
         }),
-        ('Restricciones horarias de acceso', {
+        (_('Restricciones horarias de acceso'), {
             'fields': ('access_start_time', 'access_end_time'),
             'classes': ('collapse',),
-            'description': (
+            'description': _(
                 'Opcional. Ventana horaria en la que se permite el acceso al sitio. '
                 'Solo informativo para los administrativos.'
             ),
         }),
-        ('Estado', {
+        (_('Estado'), {
             'fields': ('status',),
         }),
     )
@@ -1120,6 +1183,8 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         extra_context = extra_context or {}
         extra_context['google_maps_api_key'] = settings.GOOGLE_MAPS_API_KEY
+        ns = self.admin_site.name
+        extra_context['servicetask_url'] = reverse(f'{ns}:rutas_servicetask_changelist')
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     def save_model(self, request, obj, form, change):
@@ -1138,7 +1203,6 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
             'cabin_count': cd.get('cabin_count', 1),
             'address': cd['address'],
             'town': cd.get('town', ''),
-            'municipality': cd.get('municipality', ''),
             'postal_code': cd.get('postal_code', ''),
             'zone': cd.get('zone', ''),
             'coords_cabin': cd.get('coords_cabin', ''),
@@ -1155,55 +1219,6 @@ class ContractAdmin(ModuleFilterMixin, ExcelImportExportMixin, admin.ModelAdmin)
             loc.save()
             obj.location = loc
         super().save_model(request, obj, form, change)
-
-    def import_excel_row(self, row_data) -> bool:
-        location_name = _as_text(row_data['ubicacion'])
-        if not location_name:
-            raise ValueError('ubicacion es obligatorio.')
-        location = Location.objects.filter(name=location_name).first()
-        if not location:
-            raise ValueError(f'No existe ubicacion={location_name}')
-
-        start_date = _parse_date(row_data['fecha_inicio'])
-        if not start_date:
-            raise ValueError('fecha_inicio es obligatorio.')
-
-        if Contract.objects.filter(location=location, start_date=start_date).exists():
-            return (
-                'skipped',
-                f'Contrato omitido: ya existe para ubicación "{location_name}" con fecha_inicio "{start_date}".',
-            )
-
-        end_date = _parse_date(row_data['fecha_fin'])
-        cleaning_weekdays = _parse_weekdays(row_data['dias_limpieza'])
-        cleaning_frequency = int(row_data['limpiezas_semana']) if row_data['limpiezas_semana'] is not None else 0
-        status = _parse_choice(row_data['estado'], Contract.Status.choices, default=Contract.Status.ACTIVE)
-
-        if not cleaning_frequency:
-            raise ValueError('limpiezas_semana es obligatorio.')
-        is_coherent = cleaning_frequency == len(cleaning_weekdays)
-
-        obj = Contract.objects.create(
-            location=location,
-            start_date=start_date,
-            end_date=end_date,
-            cleaning_frequency=cleaning_frequency,
-            cleaning_weekdays=cleaning_weekdays,
-            access_start_time=_parse_time(row_data['hora_acceso_inicio']),
-            access_end_time=_parse_time(row_data['hora_acceso_fin']),
-            status=status,
-        )
-        if is_coherent:
-            obj.full_clean()
-            obj.save()
-            return 'created'
-        return (
-            'created',
-            (
-                f'Contrato #{obj.pk} importado con incoherencia: '
-                f'limpiezas_semana={cleaning_frequency} pero dias_limpieza={len(cleaning_weekdays)}.'
-            ),
-        )
 
     @admin.display(description=_('Estado'))
     def display_estado(self, obj: Contract) -> str:
@@ -1824,7 +1839,7 @@ class RouteAdmin(ModuleFilterMixin, admin.ModelAdmin):
                 'other_routes': other_routes,
                 'date': route.date,
                 'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
-                'depot_coords': settings.DEPOT_COORDS,
+                'depot_coords': DepotConfig.get_current().as_dict(),
                 'opts': Route._meta,
             },
         )
@@ -1919,7 +1934,7 @@ class RouteAdmin(ModuleFilterMixin, admin.ModelAdmin):
                 'routes_json': _j.dumps(routes_data, ensure_ascii=False),
                 'routes': routes_data,
                 'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY,
-                'depot_coords': settings.DEPOT_COORDS,
+                'depot_coords': DepotConfig.get_current().as_dict(),
                 'opts': Route._meta,
                 'changelist_url': reverse('admin:rutas_route_changelist'),
             },

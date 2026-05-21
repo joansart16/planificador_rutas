@@ -1,1 +1,33 @@
 {% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block extrahead %}
+  {{ block.super }}
+  {% if google_maps_api_key %}
+  <script>
+    window.GOOGLE_MAPS_API_KEY = "{{ google_maps_api_key }}";
+  </script>
+  <script
+    src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places&loading=async"
+    defer>
+  </script>
+  {% endif %}
+  {% if object_id %}
+  <script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var g = null;
+    document.querySelectorAll('.inline-group').forEach(function (el) {
+      var h2 = el.querySelector('h2');
+      // "Mantenim" is common to both "Mantenimientos" (ES) and "Manteniments" (CA)
+      if (h2 && h2.textContent.indexOf('Mantenim') !== -1) { g = el; }
+    });
+    if (g) {
+      var p = document.createElement('p');
+      p.style.cssText = 'padding:6px 12px 10px;font-size:.85em;border-top:1px solid #eee;margin:0;';
+      p.innerHTML = '<a href="{{ servicetask_url }}?contract__id__exact={{ object_id }}">{% trans "Todos los Mantenimientos" %} →</a>';
+      g.appendChild(p);
+    }
+  });
+  </script>
+  {% endif %}
+{% endblock %}

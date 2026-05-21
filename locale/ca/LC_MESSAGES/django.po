@@ -222,6 +222,74 @@ msgstr "Migjorn (Llucmajor / Campos)"
 msgid "Llevant (Manacor / Artà)"
 msgstr "Llevant (Manacor / Artà)"
 
+# ── Contract (seccions del formulari) ───────────────────────────────────────
+
+msgid "Presupuesto"
+msgstr "Pressupost"
+
+msgid "Identificación de la ubicación"
+msgstr "Identificació de la ubicació"
+
+msgid "Contacto en obra"
+msgstr "Contacte a l'obra"
+
+msgid "Dirección y coordenadas"
+msgstr "Adreça i coordenades"
+
+msgid "Restricción de vehículo"
+msgstr "Restricció de vehicle"
+
+msgid "Período del contrato"
+msgstr "Període del contracte"
+
+msgid "Restricciones horarias de acceso"
+msgstr "Restriccions horàries d'accés"
+
+msgid "Indica si este pedido pertenece a Obra o a Evento."
+msgstr "Indica si aquesta comanda pertany a Obra o a Esdeveniment."
+
+msgid "Responsable de la ubicación."
+msgstr "Responsable de la ubicació."
+
+msgid "Dirección textual de la ubicación. Coordenadas: pega directamente desde Google Maps (ej: 39.619316, 2.643553)."
+msgstr "Adreça textual de la ubicació. Coordenades: enganxa directament des de Google Maps (ex: 39.619316, 2.643553)."
+
+msgid "Opcional. Ventana horaria en la que se permite el acceso al sitio. Solo informativo para los administrativos."
+msgstr "Opcional. Finestra horària en la qual es permet l'accés al lloc. Només informatiu per als administratius."
+
+msgid "Empresa titular. Permite filtrar todas sus ubicaciones."
+msgstr "Empresa titular. Permet filtrar totes les seves ubicacions."
+
+msgid "Se asignará automáticamente a las tareas de este sitio."
+msgstr "S'assignarà automàticament a les tasques d'aquest lloc."
+
+msgid "Núcleo habitado (ej: Palmanyola). Se rellena automáticamente."
+msgstr "Nucli habitat (ex: Palmanyola). S'omple automàticament."
+
+msgid "Comarca o zona de la isla."
+msgstr "Comarca o zona de l'illa."
+
+msgid "Pega desde Google Maps (ej: 39.619316, 2.643553)."
+msgstr "Enganxa des de Google Maps (ex: 39.619316, 2.643553)."
+
+msgid "Opcional. Si se rellena, el exportador genera una fila extra con \"Entrada finca\"."
+msgstr "Opcional. Si s'omple, l'exportador genera una fila extra amb \"Entrada finca\"."
+
+msgid "Vehículos con tamaño superior serán rechazados (gálibo)."
+msgstr "Vehicles de mida superior seran rebutjats (gàlib)."
+
+msgid "Indicaciones operativas para el servicio en esta ubicación."
+msgstr "Indicacions operatives per al servei en aquesta ubicació."
+
+msgid "Opcional. Si se rellena, se usa en el exportador en lugar del email del cliente."
+msgstr "Opcional. Si s'omple, s'utilitza a l'exportador en lloc del correu del client."
+
+msgid "Obra o Evento."
+msgstr "Obra o Esdeveniment."
+
+msgid "Selecciona exactamente los días que correspondan a limpiezas por semana (1 a 7)."
+msgstr "Selecciona exactament els dies que corresponguin a neteges per setmana (1 a 7)."
+
 # ── Contract ────────────────────────────────────────────────────────────────
 
 msgid "Pedido"
@@ -309,6 +377,12 @@ msgstr "Manteniment"
 msgid "Mantenimientos"
 msgstr "Manteniments"
 
+msgid "Mantenimientos (últimos 5)"
+msgstr "Manteniments (últims 5)"
+
+msgid "Todos los Mantenimientos"
+msgstr "Tots els Manteniments"
+
 msgid "Tipo de tarea"
 msgstr "Tipus de tasca"
 
@@ -329,6 +403,17 @@ msgstr "Neteja"
 
 msgid "Recogida"
 msgstr "Recollida"
+
+# ── DepotConfig ─────────────────────────────────────────────────────────────
+
+msgid "Inicio de rutas"
+msgstr "Inici de rutes"
+
+msgid "Latitud"
+msgstr "Latitud"
+
+msgid "Longitud"
+msgstr "Longitud"
 
 # ── RouteStop ───────────────────────────────────────────────────────────────
 

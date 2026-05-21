@@ -788,6 +788,73 @@ class ServiceTask(models.Model):  # forward declaration — RouteStop is defined
             raise ValidationError(errors)
 
 
+class DepotConfig(models.Model):
+    """Punto de inicio y fin de todas las rutas. Singleton (pk=1 siempre)."""
+
+    name = models.CharField(
+        max_length=200, default='LooRent — Sede',
+        verbose_name=_('Nombre'),
+    )
+    address = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name=_('Dirección'),
+        help_text=_('Rellena con el buscador de Google Maps o escribe manualmente.'),
+    )
+    latitude = models.FloatField(
+        verbose_name=_('Latitud'),
+        help_text=_('Ej: 39.679469 — pega desde Google Maps o usa el buscador.'),
+    )
+    longitude = models.FloatField(
+        verbose_name=_('Longitud'),
+        help_text=_('Ej: 2.834119 — pega desde Google Maps o usa el buscador.'),
+    )
+
+    class Meta:
+        verbose_name        = _('Inicio de rutas')
+        verbose_name_plural = _('Inicio de rutas')
+
+    def __str__(self):
+        return f"{self.name} ({self.latitude:.5f}, {self.longitude:.5f})"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # Singleton: siempre pk=1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass  # No se puede eliminar
+
+    def as_dict(self):
+        """Formato compatible con el contexto depot_coords de los templates de mapa."""
+        return {'lat': self.latitude, 'lng': self.longitude, 'name': self.name}
+
+    @classmethod
+    def get_current(cls):
+        """Devuelve la instancia activa o un objeto transient con los defaults de settings."""
+        from django.conf import settings as _s
+        d = getattr(_s, 'DEPOT_COORDS', {})
+        try:
+            return cls.objects.get(pk=1)
+        except cls.DoesNotExist:
+            return cls(
+                pk=1,
+                name=d.get('name', 'LooRent — Sede'),
+                latitude=d.get('lat', 39.679469),
+                longitude=d.get('lng', 2.834119),
+            )
+
+    @classmethod
+    def get_or_create_default(cls):
+        """Garantiza que existe un registro en BD, creándolo desde settings si hace falta."""
+        from django.conf import settings as _s
+        d = getattr(_s, 'DEPOT_COORDS', {})
+        obj, _ = cls.objects.get_or_create(pk=1, defaults={
+            'name': d.get('name', 'LooRent — Sede'),
+            'latitude': d.get('lat', 39.679469),
+            'longitude': d.get('lng', 2.834119),
+        })
+        return obj
+
+
 class RouteStop(models.Model):
     """Mantenimiento assignat a una ruta, amb el seu ordre de visita."""
 
