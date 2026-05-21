@@ -855,6 +855,7 @@ class DepotConfig(models.Model):
         return obj
 
 
+
 class RouteStop(models.Model):
     """Mantenimiento assignat a una ruta, amb el seu ordre de visita."""
 
